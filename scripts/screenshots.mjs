@@ -37,6 +37,22 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
         if (!ok) failed = true;
         await page.screenshot({ path: `screenshots/${tag}-rotated.png` });
       }
+      // AI chat (day runs): uses whatever /api/conversation returns (nokey fallback locally)
+      if (time === "14:10") {
+        const desk = await page.evaluate(() => window.__pocketPal.store.getState().layout === "desk");
+        if (desk) await page.click('[data-testid="desk-chat-open"]');
+        await page.fill('[data-testid="chat-input"]', "What are you doing?");
+        await page.keyboard.press("Enter");
+        try {
+          await page.waitForFunction(() => !!window.__pocketPal.store.getState().speech, null, { timeout: 15000 });
+          await page.waitForTimeout(400);
+          const st = await page.evaluate(() => ({ sp: window.__pocketPal.store.getState().speech, e: window.__pocketPal.store.getState().emotion, p: window.__pocketPal.controller.activePriority }));
+          await page.screenshot({ path: `screenshots/${tag}-chat.png` });
+          await page.waitForFunction(() => window.__pocketPal.controller.activePriority === 0, null, { timeout: 15000 });
+          tap = `chat ok ("${st.sp}", ${st.e}, prio ${st.p}) -> back to routine`;
+          if (st.p !== 2) { failed = true; tap = "CHAT FAIL prio " + st.p; }
+        } catch (e) { failed = true; tap = "CHAT FAIL " + e.message.split("\n")[0]; }
+      }
       const errs = errors.filter((e) => !/GPU stall|WebGL.*(warning|performance)/i.test(e));
       if (errs.length) failed = true;
       results.push({ tag, errors: errs, tap });

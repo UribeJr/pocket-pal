@@ -110,3 +110,18 @@ describe("emotion", () => {
     expect(JSON.parse(JSON.stringify(tuckPersonality))).toEqual(tuckPersonality);
   });
 });
+
+describe("conversation performance", () => {
+  it("reply runs at user priority, maps action via adapter, returns to idle", async () => {
+    const { performReply } = await import("@/companion/conversation");
+    const p = performReply(ctl, { ok: true, reply: { dialogue: "same. and i did less.", emotion: "sleepy", action: "nap", memory_candidate: null } });
+    expect(ctl.activePriority).toBe(2);
+    expect(useCompanionStore.getState().speech).toBe("same. and i did less.");
+    expect(await ctl.run([{ kind: "play", clip: "lookAround" }], 1)).toBe("rejected");
+    tick(ctl, 12);
+    expect(await p).toBe("done");
+    expect(ctl.activePriority).toBe(0);
+    expect(be.plays).toContain("sleep");
+    expect(be.plays).toContain("talk");
+  });
+});

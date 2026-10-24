@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { setActiveController } from "@/engine/activeController";
 import { faceFor } from "@/engine/emotion/EmotionController";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
@@ -39,6 +40,7 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
     const c = new CharacterControllerImpl(backend, refs.current.root!, refs.current.head ?? null);
     ctl.current = c; behavior.current = new IdleBehavior(c);
     onController?.(c);
+    setActiveController(c);
     const w = window as unknown as Record<string, unknown>;
     w.__pocketPal = {
       store: useCompanionStore, controller: c,
@@ -48,7 +50,7 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
         return { x: rect.left + (v.x * 0.5 + 0.5) * rect.width, y: rect.top + (-v.y * 0.5 + 0.5) * rect.height };
       },
     };
-    return () => { delete w.__pocketPal; };
+    return () => { delete w.__pocketPal; setActiveController(null); };
   }, [get, onController]);
 
   useFrame((_, dt) => {

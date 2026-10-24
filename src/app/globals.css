@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --color-clay: #C9734B;
+  --color-cream: #EFE3CF;
+  --color-sage: #8FA68A;
+  --color-walnut: #4A3428;
+  --color-lamp: #F5C26B;
+  --color-night: #1E2433;
+  --color-ink: #2A1E18;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-ui: var(--font-nunito), system-ui, sans-serif;
+}
+
+@utility safe-pt { padding-top: max(env(safe-area-inset-top), 0.5rem); }
+@utility safe-pb { padding-bottom: max(env(safe-area-inset-bottom), 0.75rem); }
+@utility safe-px {
+  padding-left: max(env(safe-area-inset-left), 1rem);
+  padding-right: max(env(safe-area-inset-right), 1rem);
+}
+
+html, body { height: 100%; background: #1E2433; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+body { font-family: var(--font-ui); user-select: none; -webkit-user-select: none; }
+
+.tuck-bubble {
+  white-space: nowrap; background: #EFE3CF; color: #2A1E18; font-family: var(--font-nunito), sans-serif;
+  font-size: 13px; padding: 6px 12px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  animation: bubble-in .25s ease-out;
+}
+@keyframes bubble-in { from { opacity: 0; transform: translateY(4px) scale(.95); } to { opacity: 1; transform: none; } }

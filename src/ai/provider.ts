@@ -1,17 +1,17 @@
 export interface LlmMessage { role: "system" | "user" | "assistant"; content: string }
 export interface LlmRequest { system: string; messages: LlmMessage[]; schema: object; maxTokens: number; signal: AbortSignal }
 export interface LlmResult { text: string; usage: { prompt: number; completion: number }; model: string }
-export interface LlmProvider { readonly name: string; generate(req: LlmRequest): Promise<LlmResult> }
+export interface LlmProvider { readonly name: string; readonly model?: string; generate(req: LlmRequest): Promise<LlmResult> }
 
 export class ProviderError extends Error {
-  constructor(public kind: "timeout" | "rate_limited" | "server" | "auth" | "bad_request" | "network", public status = 0, public retryAfter?: number) { super(kind); }
+  constructor(public kind: "timeout" | "rate_limited" | "server" | "auth" | "bad_request" | "network", public status = 0, public retryAfter?: number, public code?: string) { super(kind); }
   get retryable() { return this.kind === "timeout" || this.kind === "rate_limited" || this.kind === "server" || this.kind === "network"; }
 }
 
 /** Groq via its OpenAI-compatible REST API (no SDK). Key is read server-side only. */
 export class GroqProvider implements LlmProvider {
   readonly name = "groq";
-  constructor(private apiKey: string, private model: string) {}
+  constructor(private apiKey: string, readonly model: string) {}
   async generate(req: LlmRequest): Promise<LlmResult> {
     let res: Response;
     try {
@@ -36,7 +36,11 @@ export class GroqProvider implements LlmProvider {
       if (res.status === 429) throw new ProviderError("rate_limited", 429, Number.isFinite(ra) ? ra : undefined);
       if (res.status === 401 || res.status === 403) throw new ProviderError("auth", res.status);
       if (res.status >= 500) throw new ProviderError("server", res.status);
-      throw new ProviderError("bad_request", res.status);
+      // Only the provider's machine-readable error code is kept (never the message, which can echo content).
+      let code: string | undefined;
+      try { const c = (await res.json())?.error?.code; if (typeof c === "string") code = c.replace(/[^\w.-]/g, "").slice(0, 48); } catch {}
+      if (code === "json_validate_failed") throw new ProviderError("server", res.status, undefined, code); // model output missed schema: retryable
+      throw new ProviderError("bad_request", res.status, undefined, code);
     }
     const data = await res.json();
     return {
@@ -50,6 +54,7 @@ export class GroqProvider implements LlmProvider {
 /** Deterministic provider for tests/dev. `script` returns text or throws per call. */
 export class MockProvider implements LlmProvider {
   readonly name = "mock";
+  readonly model = "mock";
   calls = 0;
   constructor(private script: (n: number, req: LlmRequest) => Promise<string> | string = () => JSON.stringify({ dialogue: "mock tuck says hi.", emotion: "playful", action: "none", memory_candidate: null })) {}
   async generate(req: LlmRequest): Promise<LlmResult> {

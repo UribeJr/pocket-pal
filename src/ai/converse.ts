@@ -51,7 +51,7 @@ export async function converse(req: ConversationRequest, provider: LlmProvider, 
         await sleep(err.retryAfter && err.retryAfter <= 3 ? err.retryAfter * 1000 : 300 + Math.random() * 400);
         continue;
       }
-      log({ ev: "ai.conversation", provider: provider.name, latencyMs: Date.now() - t0, attempt, outcome: err.kind, status: err.status });
+      log({ ev: "ai.conversation", provider: provider.name, model: provider.model, latencyMs: Date.now() - t0, attempt, outcome: err.kind, status: err.status, code: err.code });
       if (err.kind === "rate_limited") return fallback("rate_limited");
       if (err.kind === "auth" || err.kind === "bad_request") return fallback("misconfigured");
       return fallback("unavailable");

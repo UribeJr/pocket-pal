@@ -26,7 +26,7 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
         await page.waitForTimeout(350);
         const st = await page.evaluate(() => { const s = window.__pocketPal.store.getState(); return { a: s.animation, e: s.emotion, n: s.tapCount, sp: s.speech }; });
         await page.screenshot({ path: `screenshots/${tag}-tap.png` });
-        tap = st.n === 1 && st.a === "hop" && st.e === "happy" ? `ok (${st.a}/${st.e}, "${st.sp}")` : `FAIL ${JSON.stringify(st)}`;
+        tap = st.n === 1 && st.a === "hop" && st.e === "excited" ? `ok (${st.a}/${st.e}, "${st.sp}")` : `FAIL ${JSON.stringify(st)}`;
         if (tap.startsWith("FAIL")) failed = true;
         // orientation switch must keep state
         const other = vname === "landscape" ? views.portrait : views.landscape;

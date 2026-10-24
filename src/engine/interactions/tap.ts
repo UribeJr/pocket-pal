@@ -1,10 +1,9 @@
-import type { CharacterController } from "@/types/companion";
-import { useCompanionStore } from "@/stores/companionStore";
+import type { CharacterControllerImpl } from "@/engine/animation/CharacterControllerImpl";
+import { PRIORITY } from "@/types/companion";
 
-/** Tap on Tuck: wakes him if sleepy, otherwise a happy hop. */
-export function handleTuckTap(ctl: CharacterController) {
-  const st = useCompanionStore.getState();
-  if (st.emotion === "sleepy") st.set({ emotion: "neutral" });
+/** Tap on Tuck: wakes him if sleepy, then the arbitrated tap reaction. */
+export function handleTuckTap(ctl: CharacterControllerImpl) {
+  if (ctl.emotions.emotion === "sleepy") ctl.setEmotion("content", PRIORITY.user, 0);
   if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate?.(12);
   ctl.react("tap");
 }

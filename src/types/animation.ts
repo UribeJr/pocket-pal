@@ -33,9 +33,13 @@ export interface PlayOptions { fade?: number; onFinished?: () => void }
  */
 export interface AnimationBackend {
   has(name: ClipName): boolean;
+  /** loops never fire onFinished */
+  isLoop(name: ClipName): boolean;
   play(name: ClipName, opts?: PlayOptions): void;
   current(): ClipName | null;
   /** extra pose applied after clips (head look-at etc). */
   setOverlay(pose: Pose): void;
   update(dt: number): void;
+  /** optional per-clip playback rate (e.g. blink frequency from emotion) */
+  setSpeed?(name: ClipName, rate: number): void;
 }

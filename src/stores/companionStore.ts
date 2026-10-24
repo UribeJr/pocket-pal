@@ -23,7 +23,7 @@ interface CompanionState {
 }
 
 export const useCompanionStore = create<CompanionState>((set) => ({
-  emotion: "neutral",
+  emotion: "content",
   animation: "idle",
   behavior: "idle",
   posX: 0.9,

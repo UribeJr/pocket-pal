@@ -3,7 +3,7 @@ import type { AnimationBackend, BoneName, ClipName, PlayOptions, Pose, Procedura
 import { getClip, hasClip } from "./registry";
 import "./proceduralClips";
 
-interface Layer { clip: ProceduralClip; time: number; weight: number; target: number; fade: number; onFinished?: () => void; done?: boolean }
+interface Layer { clip: ProceduralClip; time: number; rate?: number; weight: number; target: number; fade: number; onFinished?: () => void; done?: boolean }
 interface Rest { p: THREE.Vector3; r: THREE.Euler; s: THREE.Vector3 }
 
 /**
@@ -28,8 +28,10 @@ export class ProceduralBackend implements AnimationBackend {
   }
 
   has(name: ClipName) { return hasClip(name); }
+  isLoop(name: ClipName) { return getClip(name)?.loop ?? true; }
   current() { const top = this.base[this.base.length - 1]; return top ? top.clip.name : null; }
   setOverlay(pose: Pose) { this.overlay = pose; }
+  setSpeed(name: ClipName, rate: number) { for (const l of [...this.base, ...this.additive]) if (l.clip.name === name) l.rate = rate; }
 
   play(name: ClipName, opts: PlayOptions = {}) {
     const clip = getClip(name);
@@ -44,7 +46,7 @@ export class ProceduralBackend implements AnimationBackend {
   update(dt: number) {
     this.acc.clear();
     const step = (l: Layer) => {
-      l.time += dt;
+      l.time += dt * (l.rate ?? 1);
       if (l.fade <= 0) l.weight = l.target; else {
         const d = dt / l.fade;
         l.weight = l.target > l.weight ? Math.min(l.target, l.weight + d) : Math.max(l.target, l.weight - d);

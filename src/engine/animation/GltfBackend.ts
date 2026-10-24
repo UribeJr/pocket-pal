@@ -19,12 +19,13 @@ export class GltfBackend implements AnimationBackend {
     this.mixer.addEventListener("finished", () => { const cb = this.finishCb; this.finishCb = null; cb?.(); });
   }
   has(name: ClipName) { return this.actions.has(name); }
+  isLoop(name: ClipName) { return /idle|walk|talk|sleep/.test(name); }
   current() { return this.activeName; }
   setOverlay(pose: Pose) { this.overlay = pose; }
   play(name: ClipName, opts: PlayOptions = {}) {
     const next = this.actions.get(name);
     if (!next) return;
-    const loopish = /idle|walk|talk|sleep/.test(name);
+    const loopish = this.isLoop(name);
     next.reset().setLoop(loopish ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
     next.clampWhenFinished = !loopish;
     next.play();

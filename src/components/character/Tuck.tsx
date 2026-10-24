@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { faceFor } from "@/engine/emotion/EmotionController";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { palette } from "@/lib/palette";
@@ -23,7 +24,7 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
   const bind = (n: BoneName) => (o: THREE.Object3D | null) => { refs.current[n] = o; };
   const ctl = useRef<CharacterControllerImpl | null>(null);
   const behavior = useRef<IdleBehavior | null>(null);
-  const emotion = useCompanionStore((s) => s.emotion);
+  const emotion = faceFor(useCompanionStore((s) => s.emotion));
   const speech = useCompanionStore((s) => s.speech);
   const get = useThree((s) => s.get);
 

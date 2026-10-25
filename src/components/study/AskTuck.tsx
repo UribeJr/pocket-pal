@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { copy } from "@/lib/copy";
-import { closeConversation, sendMessage, useChatStore, type ChatMessage } from "@/companion/conversation";
+import { closeConversation, retryMessage, sendMessage, useChatStore, type ChatMessage } from "@/companion/conversation";
 import { getActiveController } from "@/engine/activeController";
 import { useCompanionStore } from "@/stores/companionStore";
 import { PRIORITY } from "@/types/companion";
@@ -27,7 +27,12 @@ function Message({ m }: { m: ChatMessage }) {
     return <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-[#E9E5DE] px-3.5 py-2 text-[14px] leading-snug">{m.text}</div>;
   }
   if (m.failed) {
-    return <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-dashed border-[#CFCAC2] px-3.5 py-2 text-[14px] leading-snug text-mute" data-testid="ask-failure">{failureText(m.failed)}</div>;
+    return (
+      <div className="flex max-w-[92%] items-center gap-2 rounded-2xl rounded-bl-md border border-dashed border-[#CFCAC2] px-3.5 py-2 text-[14px] leading-snug text-mute" data-testid="ask-failure">
+        <span className="flex-1">{failureText(m.failed)}</span>
+        {m.failed !== "invalid_request" && <button type="button" className="chip shrink-0" onClick={() => void retryMessage(m.id)} data-testid="ask-retry">{copy.ask.retry}</button>}
+      </div>
+    );
   }
   return (
     <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-[14px] leading-relaxed shadow-[0_1px_2px_rgba(60,50,40,0.06)]" data-testid="ask-answer">

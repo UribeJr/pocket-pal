@@ -14,15 +14,15 @@ export const FALLBACK_LINES: Record<FallbackReason, string> = {
   forbidden: "sorry, i only talk to people on my shelf.",
 };
 
-/** study mode never jokes about failures: plain, honest lines (the panel shows fuller copy client-side) */
+/** study mode: short in-character lines (error details stay in the server logs) */
 export const STUDY_FALLBACK_LINES: Record<FallbackReason, string> = {
-  nokey: "ask tuck isn't connected yet.",
-  unavailable: "i couldn't reach my notes just now.",
-  rate_limited: "that's a lot of questions for today.",
-  misconfigured: "something's not set up right on my end.",
-  invalid_request: "i didn't quite catch that.",
-  offline: "you're offline, so i can't look that up.",
-  forbidden: "i can't answer from here.",
+  nokey: "My brain is napping. Try again in a minute?",
+  unavailable: "Oops, lost my train of thought. Try again?",
+  rate_limited: "Phew, I need a quick breather. One minute?",
+  misconfigured: "My brain is napping. Try again in a minute?",
+  invalid_request: "Hmm, I didn't quite catch that.",
+  offline: "You're offline, so I can't think that through yet.",
+  forbidden: "I can't answer from here, sorry.",
 };
 
 export const fallback = (reason: FallbackReason, mode: "companion" | "study" = "companion"): ConversationResponse => ({
@@ -70,42 +70,55 @@ export function parseReply(text: string): { reply: TuckReply; recovered: boolean
   return null;
 }
 
-export interface ConverseOptions { timeoutMs?: number; retries?: number; maxTokens?: number; sleep?: (ms: number) => Promise<void>; log?: (line: object) => void }
+export interface ConverseOptions { timeoutMs?: number; budgetMs?: number; retries?: number; maxTokens?: number; sleep?: (ms: number) => Promise<void>; log?: (line: object) => void }
 
+/**
+ * Fail fast: rate limits and timeouts are not retried. A rejected generation (missed schema, or gpt-oss
+ * trying to call a built-in tool: Groq 400 tool_use_failed) is resampled at once, first cooler, then in
+ * plain JSON mode, all inside one overall time budget.
+ */
 export async function converse(req: ConversationRequest, provider: LlmProvider, o: ConverseOptions = {}): Promise<ConversationResponse> {
   const study = req.mode === "study";
-  const { timeoutMs = study ? 15000 : 8000, retries = 1, maxTokens = study ? 1200 : 400, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = o;
+  const { timeoutMs = 8000, budgetMs = study ? 9000 : 7000, retries = 2, maxTokens = study ? 1200 : 400, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = o;
   const system = study ? buildStudyPrompt(req.context, req.study) : buildSystemPrompt(req.context);
   const messages = buildMessages(req.history, req.message);
   const t0 = Date.now();
   const fb = (r: FallbackReason) => fallback(r, req.mode);
+  const codes: string[] = [];
   for (let attempt = 0; ; attempt++) {
+    const format = attempt >= 2 ? "object" as const : "schema" as const;
     try {
-      const res = await provider.generate({ system, messages, schema: study ? STUDY_REPLY_JSON_SCHEMA : TUCK_REPLY_JSON_SCHEMA, maxTokens, signal: AbortSignal.timeout(timeoutMs) });
+      const left = Math.max(1000, Math.min(timeoutMs, t0 + budgetMs - Date.now()));
+      const res = await provider.generate({ system, messages, schema: study ? STUDY_REPLY_JSON_SCHEMA : TUCK_REPLY_JSON_SCHEMA, maxTokens, signal: AbortSignal.timeout(left), temperature: attempt === 0 ? 0.8 : 0.4, format });
+      const base = { ev: "ai.conversation", mode: req.mode, provider: provider.name, model: res.model, promptTokens: res.usage.prompt, completionTokens: res.usage.completion, latencyMs: Date.now() - t0, attempt, format, ...(codes.length ? { retriedAfter: codes } : {}) };
       if (study) {
         const parsed = parseStudyReply(res.text);
-        log({ ev: "ai.conversation", mode: "study", provider: provider.name, model: res.model, promptTokens: res.usage.prompt, completionTokens: res.usage.completion, latencyMs: Date.now() - t0, attempt, outcome: parsed ? (parsed.recovered ? "recovered" : "ok") : "invalid" });
+        log({ ...base, outcome: parsed ? (parsed.recovered ? "recovered" : "ok") : "invalid" });
         if (!parsed) return fb("unavailable");
         const r = parsed.reply;
-        const reply = { dialogue: r.line, emotion: r.emotion, action: r.action, memory_candidate: vetCandidate(r.memory_candidate, req.message) };
+        const reply = { dialogue: capitalize(r.line), emotion: r.emotion, action: r.action, memory_candidate: vetCandidate(r.memory_candidate, req.message) };
         return { ok: true, reply, answer: r.answer, recovered: parsed.recovered || undefined };
       }
       const parsed = parseReply(res.text);
-      log({ ev: "ai.conversation", provider: provider.name, model: res.model, promptTokens: res.usage.prompt, completionTokens: res.usage.completion, latencyMs: Date.now() - t0, attempt, outcome: parsed ? (parsed.recovered ? "recovered" : "ok") : "invalid" });
+      log({ ...base, outcome: parsed ? (parsed.recovered ? "recovered" : "ok") : "invalid" });
       if (!parsed) return fb("unavailable");
       // server-side provenance + sensitivity check: only facts the user literally stated survive
       const reply = { ...parsed.reply, memory_candidate: vetCandidate(parsed.reply.memory_candidate, req.message) };
       return { ok: true, reply, recovered: parsed.recovered || undefined };
     } catch (e) {
       const err = e instanceof ProviderError ? e : new ProviderError((e as Error)?.name === "TimeoutError" ? "timeout" : "network");
-      if (err.retryable && attempt < retries) {
-        await sleep(err.retryAfter && err.retryAfter <= 3 ? err.retryAfter * 1000 : 300 + Math.random() * 400);
+      codes.push(err.code ?? err.kind);
+      if (err.retryable && attempt < retries && Date.now() - t0 < budgetMs - 1500) {
+        if (err.kind !== "bad_output") await sleep(150);
         continue;
       }
-      log({ ev: "ai.conversation", mode: req.mode, provider: provider.name, model: provider.model, latencyMs: Date.now() - t0, attempt, outcome: err.kind, status: err.status, code: err.code });
+      log({ ev: "ai.conversation", mode: req.mode, provider: provider.name, model: provider.model, latencyMs: Date.now() - t0, attempt, format, outcome: err.kind, status: err.status, code: err.code, codes });
       if (err.kind === "rate_limited") return fb("rate_limited");
-      if (err.kind === "auth" || err.kind === "bad_request") return fb("misconfigured");
+      if (err.kind === "auth") return fb("misconfigured");
       return fb("unavailable");
     }
   }
 }
+
+/** Tuck's spoken line starts with a capital letter, whatever the model did */
+export const capitalize = (s: string) => s.replace(/^(\s*["'(]?)(\p{Ll})/u, (_, pre: string, c: string) => pre + c.toUpperCase());

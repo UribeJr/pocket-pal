@@ -56,10 +56,11 @@ export const copy = {
       { label: "Quiz me", prompt: "Quiz me on what I'm studying, one question at a time." },
     ],
     visitOnly: "This conversation isn't saved after you leave.",
-    failure: "I couldn't reach my notes just now. Try again in a moment.",
-    notConnected: "Ask Tuck isn't connected yet. The study assistant needs its AI key on the server.",
-    offline: "You're offline, so I can't look things up right now.",
-    rateLimited: "That's a lot of questions for today. Let's pick this up later.",
+    failure: "Oops, Tuck lost his train of thought.",
+    notConnected: "Tuck's brain is napping. Try again in a minute.",
+    offline: "You're offline, so Tuck can't think that through yet.",
+    rateLimited: "Phew, Tuck needs a quick breather. Try again in a minute.",
+    retry: "Try again",
   },
 
   settings: {

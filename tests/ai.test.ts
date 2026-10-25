@@ -46,21 +46,30 @@ describe("converse with mock provider", () => {
     const r = await converse(req, new MockProvider(() => "not json at all"), { sleep: noSleep });
     expect(r).toMatchObject({ ok: false, reason: "unavailable", reply: { dialogue: FALLBACK_LINES.unavailable } });
   });
-  it("timeout: retries once then falls back", async () => {
+  it("timeout: fails fast (no retry) with the unavailable line", async () => {
     const p = new MockProvider(() => { throw new ProviderError("timeout"); });
     const r = await converse(req, p, { sleep: noSleep });
-    expect(p.calls).toBe(2); expect(r.reason).toBe("unavailable");
+    expect(p.calls).toBe(1); expect(r.reason).toBe("unavailable");
+  });
+  it("Groq tool_use_failed is resampled: cooler, then plain JSON mode; never reported as a missing key", async () => {
+    const seen: { temperature?: number; format?: string }[] = [];
+    const p = new MockProvider((n, rq) => { seen.push({ temperature: rq.temperature, format: rq.format }); if (n < 2) throw new ProviderError("bad_output", 400, undefined, "tool_use_failed"); return good; });
+    expect((await converse(req, p, { sleep: noSleep })).ok).toBe(true);
+    expect(seen).toEqual([{ temperature: 0.8, format: "schema" }, { temperature: 0.4, format: "schema" }, { temperature: 0.4, format: "object" }]);
+    const always = new MockProvider(() => { throw new ProviderError("bad_output", 400, undefined, "tool_use_failed"); });
+    const r = await converse(req, always, { sleep: noSleep });
+    expect(always.calls).toBe(3); expect(r.reason).toBe("unavailable");
+    const other = new MockProvider(() => { throw new ProviderError("bad_request", 400, undefined, "context_length_exceeded"); });
+    expect((await converse(req, other, { sleep: noSleep })).reason).toBe("unavailable"); expect(other.calls).toBe(1);
   });
   it("real AbortSignal timeout fires", async () => {
     const p = new MockProvider((_, rq) => new Promise((_, rej) => rq.signal.addEventListener("abort", () => rej(new ProviderError("timeout")))));
     const r = await converse(req, p, { sleep: noSleep, timeoutMs: 20, retries: 0 });
     expect(r.reason).toBe("unavailable");
   });
-  it("429 once then success; 429 twice -> rate_limited", async () => {
-    const p1 = new MockProvider((n) => { if (n === 0) throw new ProviderError("rate_limited", 429, 1); return good; });
-    expect((await converse(req, p1, { sleep: noSleep })).ok).toBe(true);
-    const p2 = new MockProvider(() => { throw new ProviderError("rate_limited", 429); });
-    expect((await converse(req, p2, { sleep: noSleep })).reason).toBe("rate_limited");
+  it("429 fails fast as rate_limited (no waiting and retrying)", async () => {
+    const p2 = new MockProvider(() => { throw new ProviderError("rate_limited", 429, 5); });
+    expect((await converse(req, p2, { sleep: noSleep })).reason).toBe("rate_limited"); expect(p2.calls).toBe(1);
   });
   it("5xx retried; auth not retried", async () => {
     const p = new MockProvider((n) => { if (n === 0) throw new ProviderError("server", 503); return good; });
@@ -81,11 +90,11 @@ describe("route", () => {
     expect(r.status).toBe(200);
     expect(await r.json()).toMatchObject({ ok: false, reason: "nokey", reply: { emotion: "content", action: "none" } });
   });
-  it("foreign origin -> 403; bad body -> 400; 7th/min -> 429", async () => {
+  it("foreign origin -> 403; bad body -> 400; 30/min pass (a judge's burst), the 31st -> 429", async () => {
     expect((await call({ message: "hi" }, "https://evil.example")).status).toBe(403);
     expect((await call({ nope: 1 }, undefined, "2.2.2.2")).status).toBe(400);
-    const codes = []; for (let i = 0; i < 7; i++) codes.push((await call({ message: "hi" }, undefined, "3.3.3.3")).status);
-    expect(codes.slice(0, 6).every((c) => c === 200)).toBe(true); expect(codes[6]).toBe(429);
+    const codes = []; for (let i = 0; i < 31; i++) codes.push((await call({ message: "hi" }, undefined, "3.3.3.3")).status);
+    expect(codes.slice(0, 30).every((c) => c === 200)).toBe(true); expect(codes[30]).toBe(429);
   });
 });
 

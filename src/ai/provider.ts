@@ -1,11 +1,14 @@
 export interface LlmMessage { role: "system" | "user" | "assistant"; content: string }
-export interface LlmRequest { system: string; messages: LlmMessage[]; schema: object; maxTokens: number; signal: AbortSignal }
+/** `format: "object"` asks for plain JSON mode instead of the strict schema (a fallback when strict decoding misfires) */
+export interface LlmRequest { system: string; messages: LlmMessage[]; schema: object; maxTokens: number; signal: AbortSignal; temperature?: number; format?: "schema" | "object" }
 export interface LlmResult { text: string; usage: { prompt: number; completion: number }; model: string }
 export interface LlmProvider { readonly name: string; readonly model?: string; generate(req: LlmRequest): Promise<LlmResult> }
 
 export class ProviderError extends Error {
-  constructor(public kind: "timeout" | "rate_limited" | "server" | "auth" | "bad_request" | "network", public status = 0, public retryAfter?: number, public code?: string) { super(kind); }
-  get retryable() { return this.kind === "timeout" || this.kind === "rate_limited" || this.kind === "server" || this.kind === "network"; }
+  /** bad_output: the model's generation was rejected (missed the schema, or tried to call a tool), so a fresh sample usually works */
+  constructor(public kind: "timeout" | "rate_limited" | "server" | "bad_output" | "auth" | "bad_request" | "network", public status = 0, public retryAfter?: number, public code?: string) { super(kind); }
+  /** worth an immediate second try; rate limits and timeouts fail fast instead */
+  get retryable() { return this.kind === "server" || this.kind === "bad_output" || this.kind === "network"; }
 }
 
 /** Groq via its OpenAI-compatible REST API (no SDK). Key is read server-side only. */
@@ -23,9 +26,9 @@ export class GroqProvider implements LlmProvider {
           model: this.model,
           messages: [{ role: "system", content: req.system }, ...req.messages],
           max_completion_tokens: req.maxTokens,
-          temperature: 0.8,
+          temperature: req.temperature ?? 0.8,
           ...(this.model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" } : {}),
-          response_format: { type: "json_schema", json_schema: { name: "tuck_reply", strict: true, schema: req.schema } },
+          response_format: req.format === "object" ? { type: "json_object" } : { type: "json_schema", json_schema: { name: "tuck_reply", strict: true, schema: req.schema } },
         }),
       });
     } catch (e) {
@@ -39,7 +42,8 @@ export class GroqProvider implements LlmProvider {
       // Only the provider's machine-readable error code is kept (never the message, which can echo content).
       let code: string | undefined;
       try { const c = (await res.json())?.error?.code; if (typeof c === "string") code = c.replace(/[^\w.-]/g, "").slice(0, 48); } catch {}
-      if (code === "json_validate_failed") throw new ProviderError("server", res.status, undefined, code); // model output missed schema: retryable
+      // the model's output missed the schema, or gpt-oss tried to call a built-in tool: resample
+      if (code === "json_validate_failed" || code === "tool_use_failed") throw new ProviderError("bad_output", res.status, undefined, code);
       throw new ProviderError("bad_request", res.status, undefined, code);
     }
     const data = await res.json();

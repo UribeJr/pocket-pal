@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import * as THREE from "three";
 import { restFor, studyMoment } from "@/companion/useStudyDirector";
 import type { PomoEvent } from "@/companion/pomodoro";
-import { converse, fallback, parseStudyReply } from "@/ai/converse";
+import { capitalize, converse, fallback, parseStudyReply } from "@/ai/converse";
 import { ConversationRequest, StudyContext } from "@/ai/schema";
 import { buildStudyPrompt } from "@/ai/studyPrompt";
 import { MockProvider } from "@/ai/provider";
@@ -110,18 +110,24 @@ describe("study mode on /api/conversation", () => {
     const provider = new MockProvider(() => JSON.stringify({ line: "okay, mitosis in four steps.", answer: long, emotion: "focused", action: "none", memory_candidate: null }));
     const r = await converse(req, provider);
     expect(r.ok).toBe(true);
-    expect(r.reply.dialogue).toBe("okay, mitosis in four steps.");
+    expect(r.reply.dialogue).toBe("Okay, mitosis in four steps.");
     expect(r.answer!.length).toBeLessThanOrEqual(1600);
     expect(r.answer!.endsWith(".")).toBe(true); // trimmed at a sentence
   });
+  it("the spoken line always starts with a capital letter", async () => {
+    const provider = new MockProvider(() => JSON.stringify({ line: "okay, mitosis in four steps.", answer: "", emotion: "focused", action: "none", memory_candidate: null }));
+    expect((await converse(req, provider)).reply.dialogue).toBe("Okay, mitosis in four steps.");
+    expect(capitalize('"hm, sure."')).toBe('"Hm, sure."');
+  });
 
-  it("recovers a line from malformed output; failures use plain (non-joking) copy", async () => {
+  it("recovers a line from malformed output; failures use short in-character copy", async () => {
     expect(parseStudyReply('{"line": "hm, let me think", "answer": oops')?.reply.line).toBe("hm, let me think");
     expect(parseStudyReply("not json at all")).toBeNull();
     const bad = await converse(req, new MockProvider(() => "garbage"));
     expect(bad).toMatchObject({ ok: false, reason: "unavailable" });
     expect(bad.reply.dialogue).not.toMatch(/cute|brain/);
-    expect(fallback("nokey", "study").reply.dialogue).toMatch(/isn't connected/);
+    expect(fallback("nokey", "study").reply.dialogue).toMatch(/napping/);
+    expect(fallback("nokey", "study").reply.dialogue).not.toMatch(/key|server/i); // no internal wording
     expect(fallback("nokey").reply.dialogue).toMatch(/brain/); // companion mode unchanged
   });
 });

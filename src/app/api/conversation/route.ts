@@ -7,8 +7,9 @@ import { originAllowed } from "@/ai/origin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ipLimiter = new RateLimiter(6, 60);
-const deviceLimiter = new RateLimiter(6, 80);
+// generous enough for a long study session (and a judge's demo); Groq's own limits and spend cap sit behind these
+const ipLimiter = new RateLimiter(30, 500);
+const deviceLimiter = new RateLimiter(30, 500);
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 

@@ -15,7 +15,7 @@ import { usePomodoro, remainingMs } from "./pomodoro";
 import { clock } from "@/engine/simulation/clock";
 
 const CAMERA = { x: 0, y: 1.2, z: 6 };
-const DEVICE_DAILY_CAP = 80;
+const DEVICE_DAILY_CAP = 500;
 
 /** a chat line; Tuck's study replies carry the short spoken `text` plus the fuller `answer` */
 export interface ChatMessage extends ChatTurn { id: number; answer?: string; failed?: ConversationResponse["reason"] }
@@ -146,7 +146,7 @@ export async function sendMessage(text: string, fetcher: typeof fetch = fetch): 
       const r = await fetcher("/api/conversation", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message, history, context: buildContext(message), mode: "study", study: buildStudyContext(), deviceId: deviceId() }),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(12000),
       });
       const body = (await r.json().catch(() => null)) as ConversationResponse | null;
       res = body?.reply?.dialogue ? body : fallback("unavailable", "study");
@@ -161,6 +161,16 @@ export async function sendMessage(text: string, fetcher: typeof fetch = fetch): 
   if (res.ok) { const kv = browserKV(); if (kv) { const s = loadSession(kv, Date.now()); saveSession(kv, { ...s, conversations: s.conversations + 1, lastConversationAt: Date.now() }); } }
   void performWhenFree(res);
   return res;
+}
+
+/** Try a failed question again: its failed reply and the question itself are replaced by the new attempt. */
+export function retryMessage(failedId: number) {
+  const msgs = useChatStore.getState().messages;
+  const i = msgs.findIndex((m) => m.id === failedId);
+  const q = i > 0 ? msgs[i - 1] : undefined;
+  if (!q || q.role !== "user" || useChatStore.getState().pending) return;
+  useChatStore.setState({ messages: msgs.filter((_, k) => k !== i && k !== i - 1) });
+  return sendMessage(q.text);
 }
 
 /** Leaving chat always hands Tuck back to his routine. */

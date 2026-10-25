@@ -40,7 +40,7 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
       // AI chat (day runs): uses whatever /api/conversation returns (nokey fallback locally)
       if (time === "14:10") {
         const desk = await page.evaluate(() => window.__pocketPal.store.getState().layout === "desk");
-        if (desk) await page.click('[data-testid="desk-chat-open"]');
+        void desk; { const p = await page.evaluate(() => window.__pocketPal.tuckScreenPos()); await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.waitForTimeout(750); await page.mouse.up(); await page.waitForSelector('[data-testid="chat-input"]', { timeout: 4000 }); }
         await page.fill('[data-testid="chat-input"]', "What are you doing?");
         await page.keyboard.press("Enter");
         try {

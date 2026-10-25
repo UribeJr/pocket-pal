@@ -15,7 +15,7 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
     let mem = { kind: "likes", value: "pokémon" };
     await page.route("**/api/conversation", (route) => route.fulfill({ status: 200, contentType: "application/json", body: fixture(mem) }));
     const ready = async () => { await page.waitForFunction(() => !!window.__pocketPal?.controller, null, { timeout: 20000 }); await page.waitForTimeout(800); };
-    const send = async (t) => { if (mode === "desk" && !(await page.$('[data-testid="chat-input"]'))) await page.click('[data-testid="desk-chat-open"]'); await page.fill('[data-testid="chat-input"]', t); await page.keyboard.press("Enter"); };
+    const send = async (t) => { if (!(await page.$('[data-testid="chat-input"]'))) { const p = await page.evaluate(() => window.__pocketPal.tuckScreenPos()); await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.waitForTimeout(750); await page.mouse.up(); await page.waitForSelector('[data-testid="chat-input"]', { timeout: 4000 }); } await page.fill('[data-testid="chat-input"]', t); await page.keyboard.press("Enter"); };
     try {
       await page.goto(`${BASE}/?time=14:10`); await ready();
       // you're back after 2h away (session persistence + catch-up)

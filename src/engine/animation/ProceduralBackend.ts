@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { AnimationBackend, BoneName, ClipName, PlayOptions, Pose, ProceduralClip } from "@/types/animation";
 import { getClip, hasClip } from "./registry";
 import "./proceduralClips";
+import "./livingClips";
 
 interface Layer { clip: ProceduralClip; time: number; rate?: number; weight: number; target: number; fade: number; onFinished?: () => void; done?: boolean }
 interface Rest { p: THREE.Vector3; r: THREE.Euler; s: THREE.Vector3 }
@@ -13,6 +14,7 @@ interface Rest { p: THREE.Vector3; r: THREE.Euler; s: THREE.Vector3 }
 export class ProceduralBackend implements AnimationBackend {
   private bones = new Map<BoneName, THREE.Object3D>();
   private rest = new Map<BoneName, Rest>();
+  private rootApplied = { px: 0, pz: 0, ry: 0 };
   private base: Layer[] = [];
   private additive: Layer[] = [];
   private overlay: Pose = {};
@@ -80,6 +82,15 @@ export class ProceduralBackend implements AnimationBackend {
 
     for (const [name, obj] of this.bones) {
       const r = this.rest.get(name)!; const a = this.acc.get(name);
+      if (name === "root") {
+        // the controller owns root x/z position and yaw (locomotion, facing): keep them, layer clip offsets on top
+        const prev = this.rootApplied; const o = a ?? { p: [0, 0, 0], r: [0, 0, 0], s: [0, 0, 0] };
+        obj.position.set(obj.position.x - prev.px + o.p[0], r.p.y + o.p[1], obj.position.z - prev.pz + o.p[2]);
+        obj.rotation.set(r.r.x + o.r[0], obj.rotation.y - prev.ry + o.r[1], r.r.z + o.r[2]);
+        obj.scale.set(r.s.x * (1 + o.s[0]), r.s.y * (1 + o.s[1]), r.s.z * (1 + o.s[2]));
+        this.rootApplied = { px: o.p[0], pz: o.p[2], ry: o.r[1] };
+        continue;
+      }
       if (!a) { obj.position.copy(r.p); obj.rotation.copy(r.r); obj.scale.copy(r.s); continue; }
       obj.position.set(r.p.x + a.p[0], r.p.y + a.p[1], r.p.z + a.p[2]);
       obj.rotation.set(r.r.x + a.r[0], r.r.y + a.r[1], r.r.z + a.r[2]);

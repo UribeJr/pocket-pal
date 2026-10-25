@@ -7,6 +7,7 @@ import { actionCommands, AI_ACTIONS } from "@/ai/actions";
 import { EMOTION_STYLE } from "@/engine/emotion/EmotionController";
 import { getClip } from "@/engine/animation/registry";
 import "@/engine/animation/proceduralClips";
+import "@/engine/animation/livingClips";
 
 const req = ConversationRequest.parse({ message: "hi" });
 const noSleep = async () => {};

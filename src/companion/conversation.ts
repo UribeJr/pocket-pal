@@ -44,7 +44,7 @@ export function windowHistory(msgs: ChatTurn[], maxTurns = 12, maxChars = 6000):
 }
 let seq = 0;
 
-function deviceId(): string | undefined {
+export function deviceId(): string | undefined {
   try {
     let id = localStorage.getItem("pocketpal:v1:device");
     if (!id) { id = crypto.randomUUID(); localStorage.setItem("pocketpal:v1:device", id); }
@@ -52,7 +52,7 @@ function deviceId(): string | undefined {
   } catch { return undefined; }
 }
 /** client-side per-device daily cap (server enforces its own limits too) */
-function takeDeviceQuota(): boolean {
+export function takeDeviceQuota(): boolean {
   try {
     const day = new Date().toISOString().slice(0, 10);
     const raw = JSON.parse(localStorage.getItem("pocketpal:v1:quota") ?? "{}");

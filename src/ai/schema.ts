@@ -37,7 +37,7 @@ export const ContextSnapshot = z.strictObject({
   timeOfDay: z.enum(["morning", "afternoon", "evening", "night"]),
   layout: z.enum(["desk", "pocket"]),
   mood: z.enum(EMOTIONS),
-  activity: z.enum(["idle", "wandering", "sleeping", "reacting", "conversing"]),
+  activity: z.enum(["idle", "wandering", "sleeping", "reacting", "conversing", "focusing", "on_break"]),
   recentTaps: z.number().int().min(0).max(99),
   memories: z.array(z.string().min(1).max(100)).max(8).optional(),
   familiarity: z.string().max(160).optional(),

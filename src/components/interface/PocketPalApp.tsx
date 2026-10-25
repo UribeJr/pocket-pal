@@ -5,6 +5,7 @@ import { useIsLandscape } from "@/lib/hooks";
 import { useCompanionStore } from "@/stores/companionStore";
 import type { LayoutMode } from "@/types/companion";
 import { useSessionPersistence } from "@/companion/useSessionPersistence";
+import { useFocusDirector } from "@/companion/useFocusDirector";
 import { DeskOverlay } from "./DeskOverlay";
 import { PocketPanel } from "./PocketPanel";
 
@@ -17,6 +18,7 @@ const Scene = dynamic(() => import("@/components/environment/Scene"), { ssr: fal
 export function PocketPalApp({ forced }: { forced?: LayoutMode }) {
   const landscape = useIsLandscape();
   useSessionPersistence();
+  useFocusDirector();
   const layout = useCompanionStore((s) => s.layout);
   const set = useCompanionStore((s) => s.set);
   useEffect(() => {

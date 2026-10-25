@@ -18,7 +18,11 @@ export type BehaviorCommand =
   | { kind: "lookAt"; target: Vec3Like | null }
   | { kind: "wait"; seconds: number }
   | { kind: "say"; text: string; seconds?: number }
-  | { kind: "emote"; emotion: Emotion; hold?: number };
+  | { kind: "emote"; emotion: Emotion; hold?: number }
+  /** turn the whole body to a yaw (radians, 0 = camera) and keep it until the job ends */
+  | { kind: "face"; yaw: number }
+  /** fire a named signal for props (e.g. "hourglass:flip") */
+  | { kind: "signal"; name: string };
 
 export type RunResult = "done" | "interrupted" | "rejected";
 

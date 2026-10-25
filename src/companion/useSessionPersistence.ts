@@ -7,6 +7,8 @@ import { useCompanionStore } from "@/stores/companionStore";
 import { browserKV, requestPersist } from "./persist";
 import { catchUp, loadSession, saveSession } from "./session";
 import { memory } from "./conversation";
+import { fetchReaction, perform } from "./reactions";
+import { localReaction } from "@/ai/react";
 
 /** living P5-lite: restore mood after elapsed-time catch-up, local "you're back" line, keep lastActiveAt fresh. */
 export function useSessionPersistence() {
@@ -25,8 +27,12 @@ export function useSessionPersistence() {
       if (!ctl) return;
       const cmds = [];
       if (mood !== "content") cmds.push({ kind: "emote" as const, emotion: mood, hold: 6 });
-      if (greeting) cmds.push({ kind: "emote" as const, emotion: "surprised" as const, hold: 1.2 }, { kind: "say" as const, text: greeting, seconds: 3.2 }, { kind: "wait" as const, seconds: 3.2 });
       if (cmds.length) void ctl.run(cmds, PRIORITY.activity, "welcome-back");
+      if (greeting) {
+        // a "return after 30+ min" moment: one AI reaction, else the local greeting
+        const minutes = Math.min(100000, Math.round((now - sess.lastActiveAt) / 60000));
+        void fetchReaction("return", { minutes }).then((res) => perform(res?.ok ? res.reaction : { ...localReaction("return"), line: greeting }, "welcome-back"));
+      }
     }, 200);
     const flush = () => { const s = loadSession(kv, Date.now()); saveSession(kv, { ...s, lastActiveAt: Date.now(), mood: useCompanionStore.getState().emotion }); };
     const iv = setInterval(flush, 20_000);

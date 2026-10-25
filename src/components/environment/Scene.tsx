@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { Diorama } from "./Diorama";
 import { CameraRig } from "./CameraRig";
 import { Tuck } from "@/components/character/Tuck";
+import { Hourglass } from "./Hourglass";
+import { EnvTargets } from "./EnvTargets";
 import { useDocumentVisible } from "@/lib/hooks";
 import { palette } from "@/lib/palette";
 
@@ -23,6 +25,8 @@ export default function Scene() {
       <fog attach="fog" args={[palette.night, 9, 16]} />
       <CameraRig />
       <Diorama />
+      <Hourglass />
+      <EnvTargets />
       <Tuck />
     </Canvas>
   );

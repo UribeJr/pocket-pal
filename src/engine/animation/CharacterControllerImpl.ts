@@ -32,6 +32,11 @@ export class CharacterControllerImpl implements CharacterController {
   private speechLeft = 0;
   private warned = new Set<string>();
   private tmp = new THREE.Vector3();
+  private faceYaw = 0;
+  private listeners = new Set<(name: string) => void>();
+  /** resting loop override (e.g. "sitIdle" during a focus session); null = idle/sleep by emotion */
+  restClip: ClipName | null = null;
+  onSignal(fn: (name: string) => void) { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
 
   constructor(private backend: AnimationBackend, private root: THREE.Object3D, private head: THREE.Object3D | null) {
     const s = useCompanionStore.getState();
@@ -79,6 +84,8 @@ export class CharacterControllerImpl implements CharacterController {
       case "say": this.say(cmd.text, cmd.seconds); break;
       case "emote": this.emotions.request(cmd.emotion, job.priority, cmd.hold); break;
       case "wait": job.wait = cmd.seconds; break;
+      case "face": this.faceYaw = clamp(cmd.yaw, -1.4, 1.4); break;
+      case "signal": this.listeners.forEach((l) => l(cmd.name)); break;
     }
     if (job.wait === 0 && this.job === job) this.next(id);
   }
@@ -94,8 +101,9 @@ export class CharacterControllerImpl implements CharacterController {
   /** back to the emotion-appropriate resting loop */
   private settle(fade: number) {
     this.lookAt(null);
+    this.faceYaw = 0;
     const sleepy = this.emotions.emotion === "sleepy";
-    this.playAnimation(sleepy ? "sleep" : "idle", { fade });
+    this.playAnimation(sleepy ? "sleep" : this.restClip ?? "idle", { fade });
     useCompanionStore.getState().set({ behavior: sleepy ? "sleeping" : "idle" });
   }
 
@@ -135,6 +143,9 @@ export class CharacterControllerImpl implements CharacterController {
     useCompanionStore.getState().set({ behavior: "conversing" });
   }
 
+  /** re-settle into the current resting loop if nothing is running (e.g. after restClip changes) */
+  refreshRest() { if (!this.job) this.settle(0.5); }
+
   returnToIdle() {
     if (this.job) this.endJob("interrupted", false);
     this.settle(0.4);
@@ -173,10 +184,10 @@ export class CharacterControllerImpl implements CharacterController {
       const dx = this.moveTarget - this.root.position.x;
       const dir = Math.sign(dx);
       this.root.rotation.y = damp(this.root.rotation.y, dir * 0.9, 8, dt);
-      this.root.position.x += dir * Math.min(Math.abs(dx), WALK_SPEED * this.emotions.style.speed * dt);
+      this.root.position.x += dir * Math.min(Math.abs(dx), WALK_SPEED * Math.max(0.35, this.emotions.style.speed || 0) * dt);
       if (Math.abs(dx) < 0.01) { this.moveTarget = null; if (this.job) this.next(this.job.id); }
     } else {
-      this.root.rotation.y = damp(this.root.rotation.y, 0, 4, dt);
+      this.root.rotation.y = damp(this.root.rotation.y, this.faceYaw, 4, dt);
     }
     // head look-at (yaw/pitch relative to root), smoothed
     let yaw = 0, pitch = 0;

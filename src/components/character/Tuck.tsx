@@ -9,12 +9,24 @@ import { palette } from "@/lib/palette";
 import { useCompanionStore } from "@/stores/companionStore";
 import { ProceduralBackend } from "@/engine/animation/ProceduralBackend";
 import { CharacterControllerImpl } from "@/engine/animation/CharacterControllerImpl";
-import { IdleBehavior } from "@/engine/behavior/idleBehavior";
+import { BehaviorEngine, type EngineContext } from "@/engine/behavior/BehaviorEngine";
+import { phaseAt, useFocusStore } from "@/companion/focus";
+import { clock } from "@/engine/simulation/clock";
+import { useChatStore } from "@/companion/conversation";
+import { PRIORITY } from "@/types/companion";
 import { handleTuckTap } from "@/engine/interactions/tap";
 import { daylightAt, nowWithOverride } from "@/engine/simulation/timeOfDay";
 import type { BoneName } from "@/types/animation";
 
 const mat = (color: string, rough = 0.85) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0 });
+
+/** energy survives layout remounts */
+let savedEnergy: number | null = null;
+
+function engineCtx(): EngineContext {
+  const d = nowWithOverride(); const st = useCompanionStore.getState();
+  return { hour: d.getHours(), daylight: daylightAt(d), layout: st.layout, focus: phaseAt(useFocusStore.getState().session, clock.now()).phase, posX: st.posX, busy: st.behavior === "conversing" || useChatStore.getState().pending || useChatStore.getState().open };
+}
 
 /**
  * STAND-IN Tuck built from primitives. Groups are named like the bones a real rig
@@ -24,7 +36,7 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
   const refs = useRef<Partial<Record<BoneName, THREE.Object3D | null>>>({});
   const bind = (n: BoneName) => (o: THREE.Object3D | null) => { refs.current[n] = o; };
   const ctl = useRef<CharacterControllerImpl | null>(null);
-  const behavior = useRef<IdleBehavior | null>(null);
+  const behavior = useRef<BehaviorEngine | null>(null);
   const emotion = faceFor(useCompanionStore((s) => s.emotion));
   const speech = useCompanionStore((s) => s.speech);
   const get = useThree((s) => s.get);
@@ -38,33 +50,54 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
   useEffect(() => {
     const backend = new ProceduralBackend(refs.current);
     const c = new CharacterControllerImpl(backend, refs.current.root!, refs.current.head ?? null);
-    ctl.current = c; behavior.current = new IdleBehavior(c);
+    ctl.current = c; const h = nowWithOverride().getHours();
+    const eng = new BehaviorEngine(c, Math.random, savedEnergy ?? (h >= 22 || h < 6 ? 0.45 : 0.85));
+    behavior.current = eng;
     onController?.(c);
     setActiveController(c);
     const w = window as unknown as Record<string, unknown>;
     w.__pocketPal = {
-      store: useCompanionStore, controller: c,
+      store: useCompanionStore, controller: c, behavior: eng, focus: useFocusStore, clock,
+      engineContext: () => engineCtx(),
       tuckScreenPos: () => {
         const v = new THREE.Vector3(); refs.current.body?.getWorldPosition(v); v.y += 0.3; v.project(get().camera);
         const rect = (document.querySelector("canvas") as HTMLCanvasElement).getBoundingClientRect();
         return { x: rect.left + (v.x * 0.5 + 0.5) * rect.width, y: rect.top + (-v.y * 0.5 + 0.5) * rect.height };
       },
     };
-    return () => { delete w.__pocketPal; setActiveController(null); };
+    return () => { savedEnergy = eng.energy; delete w.__pocketPal; setActiveController(null); };
   }, [get, onController]);
 
   useFrame((_, dt) => {
     const d = Math.min(dt, 1 / 20);
     ctl.current?.update(d);
-    behavior.current?.tick(d, daylightAt(nowWithOverride()));
+    behavior.current?.tick(d, engineCtx());
   });
 
-  const onTap = (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); if (ctl.current) handleTuckTap(ctl.current); };
+  // short press = tap reaction; hold 500 ms = open the optional talk input
+  const press = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onDown = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    if (press.current) clearTimeout(press.current);
+    press.current = setTimeout(() => {
+      press.current = null;
+      const c = ctl.current; if (!c) return;
+      if (c.emotions.emotion === "sleepy") c.setEmotion("content", PRIORITY.user, 0);
+      void c.run([{ kind: "emote", emotion: "curious", hold: 4 }, { kind: "lookAt", target: { x: 0, y: 1.2, z: 6 } }, { kind: "play", clip: "idle", hold: 1.5 }], PRIORITY.user, "listen");
+      useChatStore.getState().setOpen(true);
+    }, 500);
+    const up = () => {
+      window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", cancel);
+      if (press.current) { clearTimeout(press.current); press.current = null; if (ctl.current) handleTuckTap(ctl.current); }
+    };
+    const cancel = () => { window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", cancel); if (press.current) { clearTimeout(press.current); press.current = null; } };
+    window.addEventListener("pointerup", up); window.addEventListener("pointercancel", cancel);
+  };
 
   return (
     <group ref={bind("root")} position={[0.9, 0, 0.1]}>
       {/* generous invisible hit target */}
-      <mesh position={[0, 0.4, 0]} onPointerDown={onTap} visible={false}>
+      <mesh position={[0, 0.4, 0]} onPointerDown={onDown} visible={false}>
         <sphereGeometry args={[0.55, 12, 12]} />
         <meshBasicMaterial />
       </mesh>

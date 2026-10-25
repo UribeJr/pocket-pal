@@ -2,17 +2,28 @@ import { Fragment, type ReactNode } from "react";
 
 /**
  * A tiny, safe Markdown subset for Tuck's answers: paragraphs, "- " / "* " bullets, "1." steps,
- * **bold** and `code`. It builds React elements only (no innerHTML), so model output can never inject markup.
+ * **bold**, *italic* / _italic_ and `code`. It builds React elements only (no innerHTML), so model output
+ * can never inject markup.
  */
+// italics need a non-space right after the opening marker and before the closing one, and no word
+// character just outside, so "2 * 3 * 4", "a*b" and snake_case stay plain text. No lookbehind (older
+// Safari can't parse it): the character before an italic is captured and kept as text instead.
+const INLINE = /(\*\*[^*]+\*\*|`[^`]+`)|(^|[^\w*])(\*(?=\S)[^*\n]*?\S\*)(?![\w*])|(^|[^\w_])(_(?=\S)[^_\n]*?\S_)(?![\w_])/g;
+
 function inline(text: string, key: string): ReactNode[] {
   const out: ReactNode[] = [];
-  const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  const re = new RegExp(INLINE.source, "g");
   let last = 0; let m: RegExpExecArray | null; let i = 0;
   while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    const tok = m[0];
-    out.push(tok.startsWith("**") ? <strong key={`${key}-${i++}`} className="font-medium">{tok.slice(2, -2)}</strong> : <code key={`${key}-${i++}`}>{tok.slice(1, -1)}</code>);
-    last = m.index + tok.length;
+    const prefix = m[2] ?? m[4] ?? "";
+    const tok = m[1] ?? m[3] ?? m[5];
+    const start = m.index + prefix.length;
+    if (start > last) out.push(text.slice(last, start));
+    const k = `${key}-${i++}`;
+    if (tok.startsWith("**")) out.push(<strong key={k} className="font-medium">{tok.slice(2, -2)}</strong>);
+    else if (tok.startsWith("`")) out.push(<code key={k}>{tok.slice(1, -1)}</code>);
+    else out.push(<em key={k}>{tok.slice(1, -1)}</em>);
+    last = start + tok.length;
   }
   if (last < text.length) out.push(text.slice(last));
   return out;

@@ -131,6 +131,16 @@ describe("MiniMarkdown (safe subset)", () => {
     const b = parseBlocks("Intro line\n\n- one\n- two\n\n1. first\n2. second\nClosing");
     expect(b.map((x) => x.kind)).toEqual(["p", "ul", "ol", "p"]);
   });
+  it("renders *italic* and _italic_ without touching math, words or bullets", () => {
+    const html = renderToStaticMarkup(createElement(MiniMarkdown, { text: "plants use *chlorophyll* and _light_; 2 * 3 * 4 = 24; a*b and snake_case stay; **bold *inside*** ok\n\n* a bullet\n* another" }));
+    expect(html).toContain("<em>chlorophyll</em>");
+    expect(html).toContain("<em>light</em>");
+    expect(html).toContain("2 * 3 * 4 = 24");
+    expect(html).toContain("a*b");
+    expect(html).toContain("snake_case");
+    expect(html).toContain("<li>a bullet</li>");
+    expect(html).not.toMatch(/\*chlorophyll\*/);
+  });
   it("renders bold/code and never injects HTML from model text", () => {
     const html = renderToStaticMarkup(createElement(MiniMarkdown, { text: "**Key** idea with `code` and <img src=x onerror=alert(1)>" }));
     expect(html).toContain("<strong");

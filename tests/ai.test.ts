@@ -99,3 +99,13 @@ describe("rate limiter", () => {
     t += 86_400_000; expect(l.take("a")).toBe(true);
   });
 });
+
+describe("short-term window", () => {
+  it("keeps ≤12 turns, ≤~1500 tokens, starts on a user turn", async () => {
+    const { windowHistory } = await import("@/companion/conversation");
+    const turns = Array.from({ length: 30 }, (_, i) => ({ role: (i % 2 ? "tuck" : "user") as "user" | "tuck", text: `m${i}` }));
+    const w = windowHistory(turns); expect(w).toHaveLength(12); expect(w[0].role).toBe("user"); expect(w.at(-1)!.text).toBe("m29");
+    const big = Array.from({ length: 12 }, (_, i) => ({ role: (i % 2 ? "tuck" : "user") as "user" | "tuck", text: "x".repeat(490) + i }));
+    expect(windowHistory(big).reduce((n, t) => n + t.text.length, 0)).toBeLessThanOrEqual(6000);
+  });
+});

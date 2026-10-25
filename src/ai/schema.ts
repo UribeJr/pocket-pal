@@ -39,6 +39,8 @@ export const ContextSnapshot = z.strictObject({
   mood: z.enum(EMOTIONS),
   activity: z.enum(["idle", "wandering", "sleeping", "reacting", "conversing"]),
   recentTaps: z.number().int().min(0).max(99),
+  memories: z.array(z.string().min(1).max(100)).max(8).optional(),
+  familiarity: z.string().max(160).optional(),
 });
 export type ContextSnapshot = z.infer<typeof ContextSnapshot>;
 

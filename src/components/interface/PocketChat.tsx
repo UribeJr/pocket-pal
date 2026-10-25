@@ -3,12 +3,15 @@ import { useEffect, useRef } from "react";
 import { useCompanionStore } from "@/stores/companionStore";
 import { useChatStore } from "@/companion/conversation";
 import { ChatInput } from "./ChatInput";
+import { MemoryChip } from "./MemoryChip";
+import { MemorySheet } from "./MemorySheet";
 
 /** Pocket: recent exchanges + input. Sibling of the placeholder chips (which stay untouched). */
 export function PocketChat() {
   const tapCount = useCompanionStore((s) => s.tapCount);
   const messages = useChatStore((s) => s.messages);
   const pending = useChatStore((s) => s.pending);
+  const sheet = useChatStore((s) => s.sheet);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [messages.length, pending]);
   return (
@@ -32,7 +35,12 @@ export function PocketChat() {
         {pending && <div className="max-w-[40%] rounded-2xl rounded-bl-md bg-cream/80 px-4 py-2.5 font-ui text-[15px] text-ink/60" data-testid="thinking">…</div>}
         <div ref={end} />
       </div>
+      <div className="flex items-center justify-between gap-2">
+        <MemoryChip className="min-w-0" />
+        <button data-testid="memory-open" onClick={() => useChatStore.setState({ sheet: true })} className="ml-auto shrink-0 font-ui text-[12px] text-cream/50 hover:text-cream">🧠 memories</button>
+      </div>
       <ChatInput />
+      {sheet && <MemorySheet />}
     </>
   );
 }

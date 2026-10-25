@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import { closeConversation, useChatStore } from "@/companion/conversation";
 import { ChatInput } from "./ChatInput";
+import { MemoryChip } from "./MemoryChip";
 
 /** Desk: tiny bottom-centre trigger; opens a compact pill below the shelf (never over the clock). Replies use Tuck's bubble. */
 export function DeskChat() {
@@ -19,6 +20,7 @@ export function DeskChat() {
     );
   return (
     <div className="absolute bottom-0 left-1/2 mb-[max(env(safe-area-inset-bottom),0.4rem)] flex w-[min(360px,70vw)] -translate-x-1/2 items-center gap-1.5" data-testid="desk-chat">
+      <MemoryChip className="absolute bottom-full left-0 right-0 mb-1.5" />
       <div className="flex-1"><ChatInput compact autoFocus onActivity={bump} /></div>
       <button aria-label="Close chat" onClick={closeConversation} className="grid h-8 w-8 place-items-center rounded-full bg-white/10 font-ui text-cream/70">✕</button>
     </div>

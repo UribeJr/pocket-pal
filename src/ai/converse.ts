@@ -1,3 +1,4 @@
+import { vetCandidate } from "./memoryFilter";
 import { TuckReply, TUCK_REPLY_JSON_SCHEMA, type ConversationRequest, type ConversationResponse, type FallbackReason } from "./schema";
 import { buildMessages, buildSystemPrompt } from "./prompt";
 import { ProviderError, type LlmProvider } from "./provider";
@@ -44,7 +45,9 @@ export async function converse(req: ConversationRequest, provider: LlmProvider, 
       const parsed = parseReply(res.text);
       log({ ev: "ai.conversation", provider: provider.name, model: res.model, promptTokens: res.usage.prompt, completionTokens: res.usage.completion, latencyMs: Date.now() - t0, attempt, outcome: parsed ? (parsed.recovered ? "recovered" : "ok") : "invalid" });
       if (!parsed) return fallback("unavailable");
-      return { ok: true, reply: parsed.reply, recovered: parsed.recovered || undefined };
+      // server-side provenance + sensitivity check: only facts the user literally stated survive
+      const reply = { ...parsed.reply, memory_candidate: vetCandidate(parsed.reply.memory_candidate, req.message) };
+      return { ok: true, reply, recovered: parsed.recovered || undefined };
     } catch (e) {
       const err = e instanceof ProviderError ? e : new ProviderError((e as Error)?.name === "TimeoutError" ? "timeout" : "network");
       if (err.retryable && attempt < retries) {

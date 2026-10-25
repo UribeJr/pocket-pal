@@ -86,7 +86,7 @@ describe("fallbacks", () => {
 describe("emotion", () => {
   it("maps 7 emotions to 4 faces", () => {
     expect(["content", "curious", "focused", "surprised", "playful", "excited", "sleepy"].map(faceFor))
-      .toEqual(["neutral", "curious", "curious", "curious", "happy", "happy", "sleepy"]);
+      .toEqual(["neutral", "curious", "neutral", "curious", "happy", "happy", "sleepy"]); // focused is calm (Phase 6)
   });
   it("transient emotion holds, blocks lower priority, then decays to baseline", () => {
     const seen: string[] = []; const e = new EmotionController("content", (x) => seen.push(x));

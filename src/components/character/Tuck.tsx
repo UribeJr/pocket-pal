@@ -9,8 +9,11 @@ import { ProceduralBackend } from "@/engine/animation/ProceduralBackend";
 import { GltfBackend } from "@/engine/animation/GltfBackend";
 import { bindFaceToStore } from "@/engine/animation/gltf/faceBinding";
 import { CharacterControllerImpl } from "@/engine/animation/CharacterControllerImpl";
-import { BehaviorEngine, type EngineContext } from "@/engine/behavior/BehaviorEngine";
-import { phaseAt, useFocusStore } from "@/companion/focus";
+import { BehaviorEngine, type EngineContext, type StudyPhase } from "@/engine/behavior/BehaviorEngine";
+import { usePomodoro } from "@/companion/pomodoro";
+import { useSettings } from "@/companion/settings";
+import { clockTarget } from "@/companion/useStudyDirector";
+import { openAsk } from "@/components/study/AskTuck";
 import { clock } from "@/engine/simulation/clock";
 import { useChatStore } from "@/companion/conversation";
 import { PRIORITY } from "@/types/companion";
@@ -24,9 +27,21 @@ import { GltfTuckModel, ModelBoundary, preloadTuck, type GltfTuckParts } from ".
 /** energy survives layout remounts */
 let savedEnergy: number | null = null;
 
+/** the study session as Tuck's routine sees it */
+export function studyPhase(): StudyPhase {
+  const p = usePomodoro.getState();
+  if (p.status === "ready") return "ready";
+  if (p.phase !== "focus") return "break";
+  return p.status === "paused" ? "paused" : "focus";
+}
+
 function engineCtx(): EngineContext {
   const d = nowWithOverride(); const st = useCompanionStore.getState();
-  return { hour: d.getHours(), daylight: daylightAt(d), layout: st.layout, focus: phaseAt(useFocusStore.getState().session, clock.now()).phase, posX: st.posX, busy: st.behavior === "conversing" || useChatStore.getState().pending || useChatStore.getState().open };
+  return {
+    hour: d.getHours(), daylight: daylightAt(d), layout: st.layout, focus: studyPhase(), posX: st.posX,
+    busy: st.behavior === "conversing" || useChatStore.getState().pending || useChatStore.getState().open,
+    idleFor: (Date.now() - st.lastInteraction) / 1000, clockAt: clockTarget(),
+  };
 }
 
 type Rig = { kind: "legacy" } | { kind: "glb"; parts: GltfTuckParts };
@@ -74,7 +89,7 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
     setActiveController(c);
     const w = window as unknown as Record<string, unknown>;
     w.__pocketPal = {
-      store: useCompanionStore, controller: c, behavior: eng, focus: useFocusStore, clock,
+      store: useCompanionStore, controller: c, behavior: eng, pomodoro: usePomodoro, settings: useSettings, clock,
       engineContext: () => engineCtx(),
       tuckScreenPos: () => {
         const v = new THREE.Vector3(); refs.current.body?.getWorldPosition(v); v.y += 0.3; v.project(get().camera);
@@ -105,9 +120,9 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
     press.current = setTimeout(() => {
       press.current = null;
       const c = ctl.current; if (!c) return;
-      if (c.emotions.emotion === "sleepy") c.setEmotion("content", PRIORITY.user, 0);
-      void c.run([{ kind: "emote", emotion: "curious", hold: 4 }, { kind: "lookAt", target: { x: 0, y: 1.2, z: 6 } }, { kind: "play", clip: "idle", hold: 1.5 }], PRIORITY.user, "listen");
-      useChatStore.getState().setOpen(true);
+      const seated = studyPhase() === "focus" || studyPhase() === "paused";
+      void c.run([{ kind: "emote", emotion: "curious", hold: 4 }, { kind: "lookAt", target: { x: 0, y: 1.2, z: 6 } }, { kind: "play", clip: seated ? "sitIdle" : "idle", hold: 1.5 }], PRIORITY.user, "listen");
+      openAsk();
     }, 500);
     const up = () => {
       window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", cancel);
@@ -118,7 +133,7 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
   };
 
   return (
-    <group ref={bind("root")} position={[0.9, 0, 0.1]}>
+    <group ref={bind("root")} position={[0, 0, 0]}>
       {/* generous invisible hit target */}
       <mesh position={[0, 0.4, 0]} onPointerDown={onDown} visible={false}>
         <sphereGeometry args={[0.55, 12, 12]} />
@@ -134,7 +149,7 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
         </ModelBoundary>
       )}
       {speech && (
-        <Html position={[0, 1.15, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+        <Html position={[0, 1.08, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
           <div className="tuck-bubble" data-testid="tuck-speech">{speech}</div>
         </Html>
       )}

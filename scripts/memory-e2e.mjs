@@ -15,6 +15,7 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
     let mem = { kind: "likes", value: "pokémon" };
     await page.route("**/api/conversation", (route) => route.fulfill({ status: 200, contentType: "application/json", body: fixture(mem) }));
     const ready = async () => { await page.waitForFunction(() => !!window.__pocketPal?.controller, null, { timeout: 20000 }); await page.waitForTimeout(800); };
+    const openMemory = async () => { await page.click('[data-testid="settings-open"]'); await page.click('[data-testid="memory-open"]'); };
     const send = async (t) => { if (!(await page.$('[data-testid="chat-input"]'))) { const p = await page.evaluate(() => window.__pocketPal.tuckScreenPos()); await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.waitForTimeout(750); await page.mouse.up(); await page.waitForSelector('[data-testid="chat-input"]', { timeout: 4000 }); } await page.fill('[data-testid="chat-input"]', t); await page.keyboard.press("Enter"); };
     try {
       await page.goto(`${BASE}/?time=14:10`); await ready();
@@ -35,16 +36,14 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
       check(r, (await page.evaluate(() => localStorage.getItem("pocketpal:v1:memory"))).includes("pokémon"), "saved after ✓");
       // reload persistence
       await page.reload(); await ready();
-      if (mode === "desk") { await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(800); }
-      await page.click('[data-testid="memory-open"]');
+      await openMemory(); // memory lives in Settings now, in both layouts
       check(r, (await page.textContent('[data-testid="memory-list"]')).includes("pokémon"), "fact listed after reload");
       await page.screenshot({ path: `screenshots/${bname}-${mode}-memory-sheet.png` });
       await page.click('[data-testid="memory-delete"]');
-      await page.reload(); await ready(); await page.click('[data-testid="memory-open"]');
+      await page.reload(); await ready(); await openMemory();
       check(r, (await page.textContent('[data-testid="memory-list"]')).includes("Nothing yet"), "deleted fact gone after reload");
       // off switch: no chip, nothing stored
       await page.click('[data-testid="memory-toggle"]'); await page.click('[aria-label="Close memories"]');
-      if (mode === "desk") { await page.setViewportSize({ width: 844, height: 390 }); await page.waitForTimeout(800); }
       await send("i love zelda"); mem = { kind: "likes", value: "zelda" };
       await page.waitForTimeout(1500);
       check(r, !(await page.$('[data-testid="memory-chip"]')), "memory off -> no chip");

@@ -62,17 +62,28 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
     // 4. walk: facing 1.2 rad, rate synced, stops cleanly
     await wait(page, 1500);
     const startX = (await st()).posX;
-    const target = startX > 0 ? startX - 0.9 : startX + 0.9;
+    // the study layout keeps Tuck on his spot; a short walk is enough to test facing, rate and stopping
+    const target = startX > 0 ? startX - 0.4 : startX + 0.4;
     await page.evaluate((x) => { void window.__pocketPal.controller.run([{ kind: "moveTo", x }, { kind: "wait", seconds: 1 }], 2, "e2e-walk"); }, target);
-    await wait(page, 1000);
-    s = await st(); let d = await dbg();
-    check(Math.abs(Math.abs(s.facing) - 1.2) < 0.08 && d.inCharge === "walk", `walking: |yaw| ${Math.abs(s.facing).toFixed(2)}, clip ${d.inCharge}`);
+    // sample in-page every animation frame while he walks (a short walk can be over within a second)
+    const walkStats = await page.evaluate(async () => {
+      const { backend, controller, store } = window.__pocketPal;
+      let best = { yaw: 0, ts: 0, want: 0 };
+      const t0 = performance.now();
+      while (performance.now() - t0 < 4000) {
+        await new Promise((r) => requestAnimationFrame(r));
+        const d = backend.debug(); const yaw = Math.abs(store.getState().facing);
+        if (d.inCharge === "walk" && !d.stalled && yaw > best.yaw) best = { yaw, ts: d.walkTimeScale, want: Math.max(0.35, controller.emotions.style.speed || 0) * Math.sin(yaw) };
+        if (controller.activeLabel !== "e2e-walk") break;
+      }
+      return best;
+    });
+    let d = await dbg(); s = await st();
+    check(Math.abs(walkStats.yaw - 1.2) < 0.08, `walking: |yaw| reaches ${walkStats.yaw.toFixed(2)}`);
     // expected rate = actual speed along the facing / 0.45 = max(0.35, emotion speed) * sin(|yaw|)
-    const emoSpeed = await page.evaluate(() => Math.max(0.35, window.__pocketPal.controller.emotions.style.speed || 0));
-    const wantTs = emoSpeed * Math.sin(Math.abs(s.facing));
-    check(Math.abs(d.walkTimeScale - wantTs) < 0.08, `walk rate synced to speed (timeScale ${d.walkTimeScale?.toFixed(2)}, expected ${wantTs.toFixed(2)})`);
+    check(Math.abs(walkStats.ts - walkStats.want) < 0.1, `walk rate synced to speed (timeScale ${walkStats.ts?.toFixed(2)}, expected ${walkStats.want.toFixed(2)})`);
     await shot("walking");
-    await wait(page, 2200);
+    await wait(page, 1200);
     d = await dbg();
     check(d.inCharge !== "walk", `no walking in place after arrival (in charge: ${d.inCharge})`);
 

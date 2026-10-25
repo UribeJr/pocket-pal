@@ -1,12 +1,11 @@
 "use client";
-import { actionCommands, QUIET_ACTIONS, type AiAction } from "@/ai/actions";
+import { actionCommands, type AiAction } from "@/ai/actions";
 import { localReaction, reactFallback, type ReactEvent, type ReactRequest, type ReactResponse } from "@/ai/react";
 import type { BehaviorCommand } from "@/types/companion";
 import { PRIORITY } from "@/types/companion";
 import { getActiveController } from "@/engine/activeController";
 import { buildContext, deviceId, takeDeviceQuota } from "./conversation";
-import { useFocusStore, phaseAt } from "./focus";
-import { clock } from "@/engine/simulation/clock";
+import { usePomodoro } from "./pomodoro";
 
 /**
  * Event-driven AI reactions. The model is only asked at real moments (session start/end, return,
@@ -40,8 +39,8 @@ export async function fetchReaction(event: ReactEvent, detail: ReactRequest["det
     else if (!takeDeviceQuota()) res = reactFallback(event, "rate_limited");
     else {
       const ctx = buildContext();
-      const ph = phaseAt(useFocusStore.getState().session, clock.now()).phase;
-      if (ph === "focus") ctx.activity = "focusing"; else if (ph === "break") ctx.activity = "on_break";
+      const p = usePomodoro.getState();
+      if (p.status !== "ready") ctx.activity = p.phase === "focus" ? "focusing" : "on_break";
       const r = await fetcher("/api/react", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, detail, context: ctx, deviceId: deviceId() }), signal: AbortSignal.timeout(8000) });
       const body = (await r.json().catch(() => null)) as ReactResponse | null;
       res = body?.reaction?.emotion ? body : reactFallback(event, "unavailable");
@@ -52,12 +51,21 @@ export async function fetchReaction(event: ReactEvent, detail: ReactRequest["det
 }
 
 export function reactionCommands(r: ReactResponse["reaction"], seated: boolean): BehaviorCommand[] {
-  const action: AiAction = seated && !QUIET_ACTIONS.includes(r.action) ? "none" : r.action;
+  // seated in a focus session: even the "quiet" actions are standing clips that would pop him out of
+  // his seat (a user-priority request stands him up), so he reacts from the chair instead
+  const action: AiAction = seated ? "none" : r.action;
   const cmds: BehaviorCommand[] = [{ kind: "emote", emotion: r.emotion, hold: 6 }];
   if (r.line) cmds.push({ kind: "say", text: r.line, seconds: Math.min(5, 2 + r.line.length * 0.05) });
   cmds.push(...actionCommands(action, r.emotion));
-  if (cmds.length === 1 || (r.line && action === "none")) cmds.push({ kind: "wait", seconds: 1.2 });
+  if (seated) cmds.push({ kind: "play", clip: "sitIdle", hold: r.line ? 1.5 : 1.2 });
+  else if (cmds.length === 1 || (r.line && action === "none")) cmds.push({ kind: "wait", seconds: 1.2 });
   return cmds;
+}
+
+/** a focus session is running or paused: Tuck is seated and quiet, so only quiet actions are allowed */
+export function isStudying() {
+  const p = usePomodoro.getState();
+  return p.phase === "focus" && p.status !== "ready";
 }
 
 /** wait until the controller is free of user/system jobs (max ~12 s), then perform at user priority */
@@ -68,7 +76,7 @@ export async function perform(r: ReactResponse["reaction"], label: string) {
     await new Promise((res) => setTimeout(res, 250));
   }
   const ctl = getActiveController(); if (!ctl) return;
-  const seated = phaseAt(useFocusStore.getState().session, clock.now()).phase === "focus";
+  const seated = isStudying();
   await ctl.run(reactionCommands(r, seated), PRIORITY.user, label);
 }
 

@@ -3,13 +3,11 @@ import * as THREE from "three";
 import type { AnimationBackend, ClipName, PlayOptions } from "@/types/animation";
 import { CharacterControllerImpl } from "@/engine/animation/CharacterControllerImpl";
 import { useCompanionStore } from "@/stores/companionStore";
-import { BehaviorEngine, type EngineContext } from "@/engine/behavior/BehaviorEngine";
-import { INTERACTIONS, flipHourglassCommands } from "@/engine/environment/EnvironmentRegistry";
+import { BehaviorEngine, DOZE_AFTER_S, type EngineContext } from "@/engine/behavior/BehaviorEngine";
 import { LIVING_CLIPS } from "@/engine/animation/livingClips";
 import { getClip } from "@/engine/animation/registry";
 import "@/engine/animation/proceduralClips";
 import "@/engine/animation/livingClips";
-import { phaseAt, breakFor } from "@/companion/focus";
 import { AI_ACTIONS, actionCommands } from "@/ai/actions";
 import { parseReaction, react, localReaction, buildReactPrompt, ReactRequest, REACT_EVENTS } from "@/ai/react";
 import { MockProvider, ProviderError } from "@/ai/provider";
@@ -28,7 +26,7 @@ class FakeBackend implements AnimationBackend {
 const ALL = { idle: "loop", walk: "loop", talk: "loop", sleep: "loop", sitIdle: "loop", sitKnit: "loop", hop: 0.9, happy: 1.4, lookAround: 3.2, stretch: 2.6, weightShift: 2.2, sitDown: 1.1, standUp: 0.9, yawn: 2.4, wakeUp: 1.6, inspect: 2.8, startle: 1, flip: 1.5, pinNote: 1.8 } as const;
 const tick = (c: CharacterControllerImpl, secs: number, step = 1 / 30) => { for (let t = 0; t < secs; t += step) c.update(step); };
 const seq = (vals: number[]) => { let i = 0; return () => vals[i++ % vals.length]; };
-const ctxOf = (p: Partial<EngineContext> = {}): EngineContext => ({ hour: 14, daylight: 1, layout: "desk", focus: "idle", posX: 0.9, ...p });
+const ctxOf = (p: Partial<EngineContext> = {}): EngineContext => ({ hour: 14, daylight: 1, layout: "desk", focus: "ready", posX: 0, idleFor: 0, ...p });
 
 let be: FakeBackend; let root: THREE.Object3D; let ctl: CharacterControllerImpl;
 beforeEach(() => {
@@ -69,10 +67,10 @@ describe("controller: face, signal, rest clip", () => {
   });
   it("signals reach listeners in order with the job", async () => {
     const got: string[] = []; ctl.onSignal((n) => got.push(n));
-    const p = ctl.run(flipHourglassCommands(), 3, "flip");
-    tick(ctl, 8);
+    const p = ctl.run([{ kind: "play", clip: "flip" }, { kind: "signal", name: "test:ping" }, { kind: "wait", seconds: 0.4 }], 3, "flip");
+    tick(ctl, 4);
     expect(await p).toBe("done");
-    expect(got).toEqual(["hourglass:flip"]);
+    expect(got).toEqual(["test:ping"]);
     expect(be.plays).toContain("flip");
   });
   it("settles into restClip (focus) instead of idle", async () => {
@@ -84,39 +82,62 @@ describe("controller: face, signal, rest clip", () => {
 });
 
 describe("BehaviorEngine", () => {
-  it("cycles through varied activities with quiet dominant", () => {
-    const eng = new BehaviorEngine(ctl, Math.random);
-    for (let i = 0; i < 400; i++) { eng.decide(ctxOf()); ctl.returnToIdle(); eng["t"] += 30; }
-    const counts = eng.history.reduce<Record<string, number>>((m, k) => ((m[k] = (m[k] ?? 0) + 1), m), {});
-    expect(Object.keys(counts).length).toBeGreaterThanOrEqual(8);
-    const max = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-    expect(max).toBe("quiet");
+  it("cycles through varied activities with quiet dominant (ready), and plays more on breaks", () => {
+    const count = (phase: EngineContext["focus"]) => {
+      const eng = new BehaviorEngine(ctl, Math.random);
+      for (let i = 0; i < 400; i++) { eng.decide(ctxOf({ focus: phase })); ctl.returnToIdle(); eng["t"] += 120; }
+      return eng.history.reduce<Record<string, number>>((m, k) => ((m[k] = (m[k] ?? 0) + 1), m), {});
+    };
+    const ready = count("ready");
+    expect(Object.keys(ready).length).toBeGreaterThanOrEqual(4);
+    expect(Object.entries(ready).sort((a, b) => b[1] - a[1])[0][0]).toBe("quiet");
+    expect(ready.hop ?? 0).toBe(0); // hops belong to breaks
+    const brk = count("break");
+    expect((brk.hop ?? 0) + (brk.happy ?? 0) + (brk.stretch ?? 0)).toBeGreaterThan(brk.quiet ?? 0);
   });
   it("respects cooldowns and recency", () => {
     const eng = new BehaviorEngine(ctl, () => 0.5);
-    const a = eng.activities.find((x) => x.id === "inspectClock")!;
-    eng.decide(ctxOf(), "inspectClock");
+    const a = eng.activities.find((x) => x.id === "lookAround")!;
+    eng.decide(ctxOf(), "lookAround");
     expect(eng.weightOf(a, ctxOf())).toBe(0);
     eng["t"] += a.cooldown + 1;
     expect(eng.weightOf(a, ctxOf())).toBeGreaterThan(0);
     expect(eng.weightOf(a, ctxOf())).toBeLessThan(a.base); // recency penalty
   });
-  it("focus phase allows only seated activities; pocket blocks walking", () => {
+  it("focus and pause allow only seated activities; nothing ever walks him off his spot", () => {
     const eng = new BehaviorEngine(ctl, Math.random);
     for (const a of eng.activities) {
-      const w = eng.weightOf(a, ctxOf({ focus: "focus" }));
-      if (w > 0) expect(["quiet", "glanceHourglass", "glanceUser"]).toContain(a.id);
-      if (a.walks) expect(eng.weightOf(a, ctxOf({ layout: "pocket" }))).toBe(0);
+      for (const focus of ["focus", "paused"] as const) {
+        if (eng.weightOf(a, ctxOf({ focus })) > 0) expect(["quiet", "glanceClock", "glanceUser"]).toContain(a.id);
+      }
+      for (const focus of ["ready", "focus", "paused", "break"] as const) expect(a.build(ctxOf({ focus })).some((c) => c.kind === "moveTo")).toBe(false);
     }
   });
-  it("energy drops with activity and low energy favours rest", () => {
+  it("focus decisions are far apart; dozing only happens in the ready state", () => {
+    const eng = new BehaviorEngine(ctl, () => 0.01, 0.2);
+    eng.tick(30, ctxOf({ focus: "focus", idleFor: DOZE_AFTER_S * 3, daylight: 0 }));
+    expect(eng.history).not.toContain("fallAsleep");
+    expect(eng.next).toBeGreaterThanOrEqual(20);
+    ctl.returnToIdle(); // the focus engine's quiet job would otherwise (rightly) hold the second engine back
+    const ready = new BehaviorEngine(ctl, () => 0.01, 0.2);
+    ready.tick(30, ctxOf({ focus: "ready", idleFor: DOZE_AFTER_S + 1 }));
+    expect(ready.history).toContain("fallAsleep");
+  });
+  it("a running session wakes a sleepy Tuck", () => {
+    ctl.setEmotion("sleepy", 1, Infinity);
+    const eng = new BehaviorEngine(ctl, () => 0.5);
+    eng.tick(30, ctxOf({ focus: "focus" }));
+    expect(eng.history).toContain("wakeUp");
+    expect(ctl.emotions.emotion).toBe("content");
+  });
+  it("energy drops with activity and a tired Tuck moves less", () => {
     const eng = new BehaviorEngine(ctl, Math.random, 1);
-    eng.decide(ctxOf(), "wander");
+    eng.decide(ctxOf({ focus: "break" }), "hop");
     expect(eng.energy).toBeLessThan(1);
-    const lamp = eng.activities.find((x) => x.id === "relaxLamp")!;
-    eng.energy = 0.9; const hi = eng.weightOf(lamp, ctxOf());
-    eng.energy = 0.2; const lo = eng.weightOf(lamp, ctxOf());
-    expect(lo).toBeGreaterThan(hi);
+    const look = eng.activities.find((x) => x.id === "lookAround")!;
+    eng.energy = 0.9; const hi = eng.weightOf(look, ctxOf());
+    eng.energy = 0.2; const lo = eng.weightOf(look, ctxOf());
+    expect(lo).toBeLessThan(hi);
   });
   it("tick only acts at ambient priority, through controller.run", async () => {
     const eng = new BehaviorEngine(ctl, seq([0.9, 0.9, 0.1]));
@@ -128,22 +149,9 @@ describe("BehaviorEngine", () => {
     expect(eng.history.length).toBe(1);
     expect(ctl.activePriority).toBe(1);
   });
-  it("every environment interaction builds valid commands (>=3 objects)", () => {
-    const objs = new Set(INTERACTIONS.map((i) => i.object));
-    expect(objs.size).toBeGreaterThanOrEqual(3);
-    for (const i of INTERACTIONS) { const cmds = i.build(); expect(cmds.length).toBeGreaterThan(0); for (const c of cmds) if (c.kind === "play") expect(getClip(c.clip)).toBeTruthy(); }
-  });
-});
-
-describe("focus timer (timestamps)", () => {
-  const s = { minutes: 25, startedAt: 1_000_000, focusMs: 25 * 60_000, breakMs: breakFor(25) * 60_000 };
-  it("derives phase and remaining time from timestamps", () => {
-    expect(phaseAt(null, 0).phase).toBe("idle");
-    expect(phaseAt(s, s.startedAt + 60_000)).toMatchObject({ phase: "focus", remainingMs: 24 * 60_000 });
-    expect(phaseAt(s, s.startedAt + 26 * 60_000).phase).toBe("break");
-    expect(phaseAt(s, s.startedAt + 30 * 60_000 + 1000).phase).toBe("done");
-    expect(phaseAt(s, s.startedAt + 40 * 60_000).phase).toBe("idle");
-    expect(breakFor(50)).toBe(10);
+  it("every activity only plays registered clips", () => {
+    const eng = new BehaviorEngine(ctl, Math.random);
+    for (const a of eng.activities) for (const c of a.build(ctxOf())) if (c.kind === "play") expect(getClip(c.clip), `${a.id}: ${c.clip}`).toBeTruthy();
   });
 });
 
@@ -170,10 +178,15 @@ describe("AI reactions", () => {
     expect(shouldAsk("env_tap", 1e9, () => 0.9)).toBe(false);
     expect(shouldAsk("env_tap", 1e9, () => 0.1)).toBe(true);
   });
-  it("seated reactions drop big body actions", () => {
-    const cmds = reactionCommands({ emotion: "excited", action: "hop", line: "nice.", memory_candidate: null }, true);
-    expect(cmds.some((c) => c.kind === "play" && c.clip === "hop")).toBe(false);
-    expect(cmds.some((c) => c.kind === "say")).toBe(true);
+  it("seated reactions stay in the chair (no standing clips at all)", () => {
+    for (const action of ["hop", "look_around", "yawn", "shift"] as const) {
+      const cmds = reactionCommands({ emotion: "excited", action, line: "nice.", memory_candidate: null }, true);
+      const clips = cmds.filter((c) => c.kind === "play").map((c) => (c as { clip: string }).clip);
+      expect(clips, action).toEqual(["sitIdle"]);
+      expect(cmds.some((c) => c.kind === "say")).toBe(true);
+    }
+    const standing = reactionCommands({ emotion: "excited", action: "hop", line: null, memory_candidate: null }, false);
+    expect(standing.some((c) => c.kind === "play" && c.clip === "hop")).toBe(true);
   });
 });
 

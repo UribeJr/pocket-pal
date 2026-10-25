@@ -13,7 +13,7 @@ export interface EmotionStyle {
 export const EMOTION_STYLE: Record<Emotion, EmotionStyle> = {
   content:   { face: "neutral", blinkRate: 1,    speed: 1 },
   curious:   { face: "curious", blinkRate: 1.1,  speed: 1 },
-  focused:   { face: "curious", blinkRate: 0.55, speed: 0.8 },
+  focused:   { face: "neutral", blinkRate: 0.55, speed: 0.8 }, // study sessions: calm face, slow blinks
   playful:   { face: "happy",   blinkRate: 1.3,  speed: 1.3 },
   excited:   { face: "happy",   blinkRate: 1.5,  speed: 1.4 },
   surprised: { face: "curious", blinkRate: 0.3,  speed: 1 },

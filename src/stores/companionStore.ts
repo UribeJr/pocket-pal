@@ -12,7 +12,7 @@ interface CompanionState {
   emotion: Emotion;
   animation: ClipName;
   behavior: BehaviorState;
-  /** Tuck's x position on the shelf (world units) and facing */
+  /** Tuck's x position (world units; 0 = his spot in the study layout) and facing */
   posX: number;
   facing: number;
   tapCount: number;
@@ -26,10 +26,10 @@ export const useCompanionStore = create<CompanionState>((set) => ({
   emotion: "content",
   animation: "idle",
   behavior: "idle",
-  posX: 0.9,
+  posX: 0,
   facing: 0,
   tapCount: 0,
-  lastInteraction: 0,
+  lastInteraction: Date.now(),
   speech: null,
   layout: "desk",
   set: (p) => set(p),

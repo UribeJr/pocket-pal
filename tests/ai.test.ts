@@ -79,6 +79,14 @@ describe("converse with mock provider", () => {
     expect(e).toMatchObject({ kind: "bad_output", code: "tool_use_failed", detail: { tool: "json" } });
     globalThis.fetch = real;
   });
+  it("429 on the main model switches once to the fallback model (its own Groq bucket)", async () => {
+    const main = new MockProvider(() => { throw new ProviderError("rate_limited", 429); });
+    const spare = new MockProvider(() => good);
+    expect((await converse(req, main, { sleep: noSleep, fallback: spare })).ok).toBe(true);
+    expect([main.calls, spare.calls]).toEqual([1, 1]);
+    const spare2 = new MockProvider(() => { throw new ProviderError("rate_limited", 429); });
+    expect((await converse(req, main, { sleep: noSleep, fallback: spare2 })).reason).toBe("rate_limited"); expect(spare2.calls).toBe(1);
+  });
   it("429 fails fast as rate_limited (no waiting and retrying)", async () => {
     const p2 = new MockProvider(() => { throw new ProviderError("rate_limited", 429, 5); });
     expect((await converse(req, p2, { sleep: noSleep })).reason).toBe("rate_limited"); expect(p2.calls).toBe(1);

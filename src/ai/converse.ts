@@ -70,7 +70,8 @@ export function parseReply(text: string): { reply: TuckReply; recovered: boolean
   return null;
 }
 
-export interface ConverseOptions { timeoutMs?: number; budgetMs?: number; retries?: number; maxTokens?: number; sleep?: (ms: number) => Promise<void>; log?: (line: object) => void }
+/** `fallback`: a second model with its own Groq rate-limit bucket, used once when the first one is rate limited */
+export interface ConverseOptions { timeoutMs?: number; budgetMs?: number; retries?: number; maxTokens?: number; fallback?: LlmProvider; sleep?: (ms: number) => Promise<void>; log?: (line: object) => void }
 
 /**
  * Fail fast: rate limits and timeouts are not retried. A rejected generation (missed schema, or gpt-oss
@@ -79,18 +80,19 @@ export interface ConverseOptions { timeoutMs?: number; budgetMs?: number; retrie
  */
 export async function converse(req: ConversationRequest, provider: LlmProvider, o: ConverseOptions = {}): Promise<ConversationResponse> {
   const study = req.mode === "study";
-  const { timeoutMs = 8000, budgetMs = study ? 9000 : 7000, retries = 2, maxTokens = study ? 800 : 400, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = o;
+  const { timeoutMs = 8000, budgetMs = study ? 9000 : 7000, retries = 2, maxTokens = study ? 600 : 400, fallback: spare, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = o;
   const system = study ? buildStudyPrompt(req.context, req.study) : buildSystemPrompt(req.context);
   const messages = buildMessages(req.history, req.message);
   const t0 = Date.now();
   const fb = (r: FallbackReason) => fallback(r, req.mode);
   const codes: string[] = [];
+  let p = provider;
   for (let attempt = 0; ; attempt++) {
     const format = attempt >= 1 ? "tool" as const : "schema" as const;
     try {
       const left = Math.max(1000, Math.min(timeoutMs, t0 + budgetMs - Date.now()));
-      const res = await provider.generate({ system, messages, schema: study ? STUDY_REPLY_JSON_SCHEMA : TUCK_REPLY_JSON_SCHEMA, maxTokens, signal: AbortSignal.timeout(left), temperature: attempt === 0 ? 0.8 : 0.4, format });
-      const base = { ev: "ai.conversation", mode: req.mode, provider: provider.name, model: res.model, promptTokens: res.usage.prompt, completionTokens: res.usage.completion, latencyMs: Date.now() - t0, attempt, format, ...(codes.length ? { retriedAfter: codes } : {}) };
+      const res = await p.generate({ system, messages, schema: study ? STUDY_REPLY_JSON_SCHEMA : TUCK_REPLY_JSON_SCHEMA, maxTokens, signal: AbortSignal.timeout(left), temperature: attempt === 0 ? 0.8 : 0.4, format });
+      const base = { ev: "ai.conversation", mode: req.mode, provider: p.name, model: res.model, promptTokens: res.usage.prompt, completionTokens: res.usage.completion, latencyMs: Date.now() - t0, attempt, format, ...(codes.length ? { retriedAfter: codes } : {}) };
       if (study) {
         const parsed = parseStudyReply(res.text);
         log({ ...base, outcome: parsed ? (parsed.recovered ? "recovered" : "ok") : "invalid" });
@@ -108,11 +110,12 @@ export async function converse(req: ConversationRequest, provider: LlmProvider, 
     } catch (e) {
       const err = e instanceof ProviderError ? e : new ProviderError((e as Error)?.name === "TimeoutError" ? "timeout" : "network");
       codes.push([err.code ?? err.kind, err.detail?.tool].filter(Boolean).join(":"));
+      if (err.kind === "rate_limited" && spare && p !== spare && Date.now() - t0 < budgetMs - 1500) { p = spare; attempt = -1; continue; }
       if (err.retryable && attempt < retries && Date.now() - t0 < budgetMs - 1500) {
         if (err.kind !== "bad_output") await sleep(150);
         continue;
       }
-      log({ ev: "ai.conversation", mode: req.mode, provider: provider.name, model: provider.model, latencyMs: Date.now() - t0, attempt, format, outcome: err.kind, status: err.status, code: err.code, codes, ...(err.detail ?? {}) });
+      log({ ev: "ai.conversation", mode: req.mode, provider: p.name, model: p.model, latencyMs: Date.now() - t0, attempt, format, outcome: err.kind, status: err.status, code: err.code, codes, ...(err.detail ?? {}) });
       if (err.kind === "rate_limited") return fb("rate_limited");
       if (err.kind === "auth") return fb("misconfigured");
       return fb("unavailable");

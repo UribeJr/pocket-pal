@@ -28,6 +28,9 @@ export async function POST(req: Request) {
   const key = process.env.GROQ_API_KEY;
   if (process.env.AI_ENABLED === "false" || !key) return json(fallback("nokey", parsed.data.mode));
   const provider = new GroqProvider(key, process.env.GROQ_MODEL || "openai/gpt-oss-20b");
-  const res = await converse(parsed.data, provider, { log: (l) => console.log(JSON.stringify(l)) });
+  // Groq rate-limits each model separately: a second model doubles the room before anyone sees "breather"
+  const spareModel = process.env.GROQ_FALLBACK_MODEL ?? "openai/gpt-oss-120b";
+  const spare = spareModel && spareModel !== provider.model ? new GroqProvider(key, spareModel) : undefined;
+  const res = await converse(parsed.data, provider, { fallback: spare, log: (l) => console.log(JSON.stringify(l)) });
   return json(res);
 }

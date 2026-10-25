@@ -74,19 +74,19 @@ export interface ConverseOptions { timeoutMs?: number; budgetMs?: number; retrie
 
 /**
  * Fail fast: rate limits and timeouts are not retried. A rejected generation (missed schema, or gpt-oss
- * trying to call a built-in tool: Groq 400 tool_use_failed) is resampled at once, first cooler, then in
- * plain JSON mode, all inside one overall time budget.
+ * trying to call a built-in tool: Groq 400 tool_use_failed) is resampled at once, cooler and as a forced
+ * call to a single `tuck_reply` function, all inside one overall time budget.
  */
 export async function converse(req: ConversationRequest, provider: LlmProvider, o: ConverseOptions = {}): Promise<ConversationResponse> {
   const study = req.mode === "study";
-  const { timeoutMs = 8000, budgetMs = study ? 9000 : 7000, retries = 2, maxTokens = study ? 1200 : 400, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = o;
+  const { timeoutMs = 8000, budgetMs = study ? 9000 : 7000, retries = 2, maxTokens = study ? 800 : 400, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = o;
   const system = study ? buildStudyPrompt(req.context, req.study) : buildSystemPrompt(req.context);
   const messages = buildMessages(req.history, req.message);
   const t0 = Date.now();
   const fb = (r: FallbackReason) => fallback(r, req.mode);
   const codes: string[] = [];
   for (let attempt = 0; ; attempt++) {
-    const format = attempt >= 2 ? "object" as const : "schema" as const;
+    const format = attempt >= 1 ? "tool" as const : "schema" as const;
     try {
       const left = Math.max(1000, Math.min(timeoutMs, t0 + budgetMs - Date.now()));
       const res = await provider.generate({ system, messages, schema: study ? STUDY_REPLY_JSON_SCHEMA : TUCK_REPLY_JSON_SCHEMA, maxTokens, signal: AbortSignal.timeout(left), temperature: attempt === 0 ? 0.8 : 0.4, format });
@@ -107,12 +107,12 @@ export async function converse(req: ConversationRequest, provider: LlmProvider, 
       return { ok: true, reply, recovered: parsed.recovered || undefined };
     } catch (e) {
       const err = e instanceof ProviderError ? e : new ProviderError((e as Error)?.name === "TimeoutError" ? "timeout" : "network");
-      codes.push(err.code ?? err.kind);
+      codes.push([err.code ?? err.kind, err.detail?.tool].filter(Boolean).join(":"));
       if (err.retryable && attempt < retries && Date.now() - t0 < budgetMs - 1500) {
         if (err.kind !== "bad_output") await sleep(150);
         continue;
       }
-      log({ ev: "ai.conversation", mode: req.mode, provider: provider.name, model: provider.model, latencyMs: Date.now() - t0, attempt, format, outcome: err.kind, status: err.status, code: err.code, codes });
+      log({ ev: "ai.conversation", mode: req.mode, provider: provider.name, model: provider.model, latencyMs: Date.now() - t0, attempt, format, outcome: err.kind, status: err.status, code: err.code, codes, ...(err.detail ?? {}) });
       if (err.kind === "rate_limited") return fb("rate_limited");
       if (err.kind === "auth") return fb("misconfigured");
       return fb("unavailable");

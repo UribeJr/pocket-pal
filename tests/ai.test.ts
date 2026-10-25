@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { converse, parseReply, FALLBACK_LINES } from "@/ai/converse";
-import { MockProvider, ProviderError } from "@/ai/provider";
+import { GroqProvider, MockProvider, ProviderError } from "@/ai/provider";
 import { RateLimiter } from "@/ai/rateLimit";
 import { ConversationRequest, EMOTIONS, TUCK_REPLY_JSON_SCHEMA } from "@/ai/schema";
 import { actionCommands, AI_ACTIONS } from "@/ai/actions";
@@ -51,11 +51,11 @@ describe("converse with mock provider", () => {
     const r = await converse(req, p, { sleep: noSleep });
     expect(p.calls).toBe(1); expect(r.reason).toBe("unavailable");
   });
-  it("Groq tool_use_failed is resampled: cooler, then plain JSON mode; never reported as a missing key", async () => {
+  it("Groq tool_use_failed is resampled cooler as a forced tuck_reply call; never reported as a missing key", async () => {
     const seen: { temperature?: number; format?: string }[] = [];
     const p = new MockProvider((n, rq) => { seen.push({ temperature: rq.temperature, format: rq.format }); if (n < 2) throw new ProviderError("bad_output", 400, undefined, "tool_use_failed"); return good; });
     expect((await converse(req, p, { sleep: noSleep })).ok).toBe(true);
-    expect(seen).toEqual([{ temperature: 0.8, format: "schema" }, { temperature: 0.4, format: "schema" }, { temperature: 0.4, format: "object" }]);
+    expect(seen).toEqual([{ temperature: 0.8, format: "schema" }, { temperature: 0.4, format: "tool" }, { temperature: 0.4, format: "tool" }]);
     const always = new MockProvider(() => { throw new ProviderError("bad_output", 400, undefined, "tool_use_failed"); });
     const r = await converse(req, always, { sleep: noSleep });
     expect(always.calls).toBe(3); expect(r.reason).toBe("unavailable");
@@ -66,6 +66,18 @@ describe("converse with mock provider", () => {
     const p = new MockProvider((_, rq) => new Promise((_, rej) => rq.signal.addEventListener("abort", () => rej(new ProviderError("timeout")))));
     const r = await converse(req, p, { sleep: noSleep, timeoutMs: 20, retries: 0 });
     expect(r.reason).toBe("unavailable");
+  });
+  it("GroqProvider: tool format forces one tuck_reply call and reads its arguments; 400s keep only code + tool name", async () => {
+    const real = globalThis.fetch; let sent: Record<string, unknown> = {};
+    globalThis.fetch = (async (_u: string, init: RequestInit) => { sent = JSON.parse(String(init.body)); return Response.json({ model: "m", choices: [{ message: { content: null, tool_calls: [{ function: { name: "tuck_reply", arguments: good } }] } }] }); }) as typeof fetch;
+    const g = new GroqProvider("k", "openai/gpt-oss-20b");
+    const r = await g.generate({ system: "s", messages: [], schema: {}, maxTokens: 10, signal: AbortSignal.timeout(1000), format: "tool" });
+    expect(r.text).toBe(good);
+    expect(sent.tool_choice).toEqual({ type: "function", function: { name: "tuck_reply" } }); expect(sent.response_format).toBeUndefined();
+    globalThis.fetch = (async () => Response.json({ error: { code: "tool_use_failed", message: "attempted to call tool 'json' which was not in request.tools; user text here" } }, { status: 400 })) as typeof fetch;
+    const e = await g.generate({ system: "s", messages: [], schema: {}, maxTokens: 10, signal: AbortSignal.timeout(1000) }).catch((x) => x);
+    expect(e).toMatchObject({ kind: "bad_output", code: "tool_use_failed", detail: { tool: "json" } });
+    globalThis.fetch = real;
   });
   it("429 fails fast as rate_limited (no waiting and retrying)", async () => {
     const p2 = new MockProvider(() => { throw new ProviderError("rate_limited", 429, 5); });

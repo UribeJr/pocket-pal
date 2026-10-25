@@ -131,7 +131,8 @@ export async function sendMessage(text: string, fetcher: typeof fetch = fetch): 
   const message = text.trim().slice(0, 500);
   const chat = useChatStore.getState();
   if (!message || chat.pending) return fallback("invalid_request", "study");
-  const history = windowHistory(chat.messages.filter((m) => !m.failed).map((m) => ({ role: m.role, text: m.role === "tuck" ? historyText(m) : m.text })));
+  // the last 8 turns (~1,500 tokens) keep each request small, so Groq's tokens-per-minute cap goes further
+  const history = windowHistory(chat.messages.filter((m) => !m.failed).map((m) => ({ role: m.role, text: m.role === "tuck" ? historyText(m) : m.text })), 8, 6000);
   useChatStore.setState({ pending: true, messages: [...chat.messages, { id: ++seq, role: "user" as const, text: message }] });
   useCompanionStore.getState().set({ lastInteraction: Date.now() });
   const ctl = getActiveController();

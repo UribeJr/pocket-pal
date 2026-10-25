@@ -70,14 +70,14 @@ export class CharacterControllerImpl implements CharacterController {
     job.wait = 0;
     switch (cmd.kind) {
       case "play": {
-        const played = this.playAnimation(cmd.clip, { fallback: cmd.fallback, fade: cmd.fade, onFinished: () => this.next(id) });
+        const played = this.playAnimation(cmd.clip, { fallback: cmd.fallback, fade: cmd.fade, priority: job.priority, onFinished: () => this.next(id) });
         // loops (incl. fallback to idle) never finish on their own: hold for `hold` seconds
         job.wait = this.backend.isLoop(played) ? (cmd.hold ?? 0) : null;
         break;
       }
       case "moveTo":
         this.moveTarget = clamp(cmd.x, -1.6, 1.6);
-        this.playAnimation("walk", { fade: 0.25 });
+        this.playAnimation("walk", { fade: 0.25, priority: job.priority });
         job.wait = null;
         break;
       case "lookAt": this.lookAt(cmd.target); break;
@@ -114,7 +114,7 @@ export class CharacterControllerImpl implements CharacterController {
     const clip = chain.find((c) => this.backend.has(c));
     if (clip !== name && !this.warned.has(name)) { this.warned.add(name); console.warn(`[Tuck] clip "${name}" unavailable, using "${clip ?? "none"}"`); }
     if (!clip) return "idle";
-    this.backend.play(clip, { fade: opts.fade, onFinished: opts.onFinished });
+    this.backend.play(clip, { fade: opts.fade, onFinished: opts.onFinished, priority: opts.priority });
     useCompanionStore.getState().set({ animation: clip });
     return clip;
   }
@@ -183,7 +183,7 @@ export class CharacterControllerImpl implements CharacterController {
     if (this.moveTarget !== null) {
       const dx = this.moveTarget - this.root.position.x;
       const dir = Math.sign(dx);
-      this.root.rotation.y = damp(this.root.rotation.y, dir * 0.9, 8, dt);
+      this.root.rotation.y = damp(this.root.rotation.y, dir * (this.backend.walkYaw ?? 0.9), 8, dt);
       this.root.position.x += dir * Math.min(Math.abs(dx), WALK_SPEED * Math.max(0.35, this.emotions.style.speed || 0) * dt);
       if (Math.abs(dx) < 0.01) { this.moveTarget = null; if (this.job) this.next(this.job.id); }
     } else {

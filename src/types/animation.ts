@@ -25,7 +25,12 @@ export interface ProceduralClip {
   sample(t: number, ctx: ClipContext): Pose;
 }
 
-export interface PlayOptions { fade?: number; onFinished?: () => void }
+export interface PlayOptions {
+  fade?: number;
+  onFinished?: () => void;
+  /** priority of the job asking (PRIORITY.*); lets a backend favour responsiveness for user taps */
+  priority?: number;
+}
 
 /**
  * What the controller talks to. ProceduralBackend drives the primitive stand-in;
@@ -42,4 +47,6 @@ export interface AnimationBackend {
   update(dt: number): void;
   /** optional per-clip playback rate (e.g. blink frequency from emotion) */
   setSpeed?(name: ClipName, rate: number): void;
+  /** optional root yaw while walking (radians, ± by direction); the controller defaults to 0.9 */
+  readonly walkYaw?: number;
 }

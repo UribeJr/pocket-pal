@@ -116,8 +116,8 @@ describe("study mode on /api/conversation", () => {
     expect(buildFocusPrompt(undefined, study, "checkin", "no")).toMatch(/they answered: not yet/);
     expect(buildFocusPrompt(undefined, { ...study, focusMinToday: 57 })).toContain("7 min elapsed, 18 min left. Session 3 of 4 in this cycle. Focus sessions completed today: 2. Total focus time today: 57 min.");
     const chat = buildFocusPrompt(undefined, study);
-    expect(chat).toMatch(/ask exactly ONE short question/);
-    expect(chat).toMatch(/grade it \(Correct \/ Partly \/ Not quite\)/);
+    expect(chat).toMatch(/line IS exactly ONE short question/);
+    expect(chat).toMatch(/starts with Correct!, Partly. or Not quite./);
     expect(chat).toMatch(/line FIRST acknowledges the feeling/);
     expect(chat).toMatch(/exact numbers in <session>/);
     expect(chat.length).toBeLessThan(4200); // ~1,000 tokens: slim, Groq's per-minute cap is shared

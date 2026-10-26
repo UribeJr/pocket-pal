@@ -32,16 +32,51 @@ export function fitCamera(aspect: number, follow = 0) {
   return { dist, cx, cy };
 }
 
+/** where Tuck's frame sits inside the full-screen canvas, in CSS pixels */
+export interface FrameRect { x: number; y: number; w: number; h: number }
+
+/**
+ * The canvas fills the screen (the room continues behind the timer), but Tuck is fitted to the
+ * .study-frame cell: the camera's aspect is the cell's, and a view offset widens the picture to the
+ * whole canvas, so he sits exactly where the cell is.
+ */
+export function viewOffsetFor(canvas: { w: number; h: number }, frame: FrameRect) {
+  return { fullWidth: frame.w, fullHeight: frame.h, x: -frame.x, y: -frame.y, width: canvas.w, height: canvas.h };
+}
+
 /** Frontal studio camera that refits on every resize and follows Tuck's x gently. */
 export function StudioCamera() {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const size = useThree((s) => s.size);
+  const gl = useThree((s) => s.gl);
   const first = useRef(true);
   const target = useRef(new THREE.Vector3());
   const pos = useRef(new THREE.Vector3());
-  useEffect(() => { camera.fov = FOV; camera.near = 0.1; camera.far = 30; camera.updateProjectionMatrix(); }, [camera]);
+  const frame = useRef<FrameRect | null>(null);
+  useEffect(() => { camera.fov = FOV; camera.near = 0.1; camera.far = 40; (camera as THREE.PerspectiveCamera & { manual?: boolean }).manual = true; camera.updateProjectionMatrix(); }, [camera]);
+  // track the .study-frame cell relative to the canvas (layout changes, rotation, the Ask panel opening)
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>(".study-frame");
+    if (!el) return;
+    const measure = () => {
+      const c = gl.domElement.getBoundingClientRect(); const r = el.getBoundingClientRect();
+      frame.current = r.width > 1 && r.height > 1 ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;
+    };
+    measure();
+    const ro = new ResizeObserver(measure); ro.observe(el); ro.observe(gl.domElement);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, [gl]);
   useFrame((_, dt) => {
-    const aspect = size.width / Math.max(1, size.height);
+    const f = frame.current;
+    const aspect = f ? f.w / f.h : size.width / Math.max(1, size.height);
+    if (f) {
+      const v = viewOffsetFor({ w: size.width, h: size.height }, f);
+      if (camera.aspect !== aspect || camera.view?.offsetX !== v.x || camera.view?.offsetY !== v.y || camera.view?.width !== v.width || camera.view?.height !== v.height || camera.view?.fullWidth !== v.fullWidth || camera.view?.fullHeight !== v.fullHeight) {
+        camera.aspect = aspect;
+        camera.setViewOffset(v.fullWidth, v.fullHeight, v.x, v.y, v.width, v.height);
+      }
+    } else if (camera.view) { camera.clearViewOffset(); camera.aspect = aspect; camera.updateProjectionMatrix(); }
     const follow = THREE.MathUtils.clamp(useCompanionStore.getState().posX, -0.35, 0.35) * 0.85;
     const { dist, cx, cy } = fitCamera(aspect, follow);
     target.current.set(cx, cy, 0);

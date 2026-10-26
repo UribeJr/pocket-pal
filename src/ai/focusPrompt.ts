@@ -24,7 +24,7 @@ export function buildFocusPrompt(ctx?: ContextSnapshot, study?: StudyContext, mo
   ];
   if (moment === "start") lines.push(`MOMENT start: the user just pressed Start on a ${focusMin}-minute focus session; their message is what they're working on. Set goal to ONE step they can finish in ${focusMin} minutes (e.g. "Draft the intro paragraph"). line cheers them into it and names the goal. answer: "".`);
   else if (moment === "checkin") lines.push(`MOMENT check-in: the focus session just ended. Their goal was "${study?.goal ?? "their task"}" and they answered: ${CHECKIN[checkin ?? "almost"]}. line: celebrate a finish, encourage an almost, reassure a not-yet kindly. goal: a sensible next step for the next ${focusMin}-minute session (smaller if they didn't finish). answer: "".`);
-  else lines.push("MOMENT chat: help them get focused or unstuck. Use answer only for a short plan or steps (at most 5 bullets). Set goal only when you suggest a new focus goal.");
+  else lines.push("MOMENT chat: help them get focused or unstuck. If they're distracted, give ONE tiny refocus trick in line (phone face-down, close a tab, one deep breath) and keep their current goal. If stuck, suggest the smallest next step. Use answer only for a short plan (at most 5 bullets). Set goal only when you suggest a new focus goal.");
   if (ctx?.memories?.length) lines.push(`<memories>${ctx.memories.map((m) => `- ${m}`).join("\n")}</memories>`);
   if (ctx) lines.push(`<context>local time ${ctx.localTime} (${ctx.timeOfDay}).</context>`);
   if (study) {

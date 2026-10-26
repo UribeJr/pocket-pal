@@ -39,11 +39,12 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   position: fixed; inset: 0; display: grid; overflow: hidden;
   background: linear-gradient(to bottom, #DEDBD5, #C9C4BD);
 }
-.study-leftbg { background: #D5D2CB; }
 .study-clock { grid-area: clock; container-type: inline-size; display: flex; flex-direction: column; align-items: center; min-width: 0; }
 .study-controls { grid-area: controls; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .study-bottom { grid-area: bottom; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; min-height: 0; }
-.study-stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; }
+.study-stage { position: absolute; inset: 0; z-index: 0; }
+.study-frame { grid-area: stage; min-width: 0; min-height: 0; pointer-events: none; }
+.study-top, .study-clock, .study-controls, .study-bottom { position: relative; z-index: 1; }
 
 /* landscape / desktop: timer left, Tuck right */
 .study[data-layout="desk"] {
@@ -51,7 +52,6 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   grid-template-rows: minmax(0, 1fr) auto auto minmax(0, 1fr);
   grid-template-areas: "top stage" "clock stage" "controls stage" "bottom stage";
 }
-.study[data-layout="desk"] .study-leftbg { grid-column: 1; grid-row: 1 / -1; }
 .study[data-layout="desk"] .study-clock { padding: 0 4%; }
 .study[data-layout="desk"] .study-bottom {
   padding: 0 6% max(env(safe-area-inset-bottom), 1.25rem);
@@ -65,7 +65,6 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   grid-template-areas: "top" "clock" "stage" "controls" "bottom";
 }
-.study[data-layout="pocket"] .study-leftbg { grid-column: 1; grid-row: 1 / 3; }
 .study[data-layout="pocket"] .study-top { padding-top: max(env(safe-area-inset-top), 0.75rem); }
 .study[data-layout="pocket"] .study-clock { padding: 0 8% 14px; }
 .study[data-layout="pocket"] .clock-digits { font-size: min(30cqi, 15vh); }

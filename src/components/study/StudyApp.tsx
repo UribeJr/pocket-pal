@@ -19,9 +19,9 @@ import { SettingsSheet } from "./SettingsSheet";
 const StudyStage = dynamic(() => import("./StudyStage"), { ssr: false });
 
 /**
- * "Study with Tuck": the timer on the left (top on phones), Tuck on the right (middle on phones), and a
- * discreet way to ask him for help. One persistent Canvas in both layouts: rotating only moves it to
- * another grid area and refits the camera, so Tuck, the timer and all state carry on untouched.
+ * "Focus with Tuck": the timer on the left (top on phones), Tuck on the right (middle on phones), and a
+ * discreet way to ask him for help. One persistent full-screen Canvas draws the room behind everything;
+ * the camera frames Tuck inside the .study-frame grid cell, so rotating only refits it.
  */
 export function StudyApp({ forced }: { forced?: LayoutMode }) {
   const landscape = useIsLandscape();
@@ -48,11 +48,12 @@ export function StudyApp({ forced }: { forced?: LayoutMode }) {
 
   return (
     <main className="study" data-layout={layout} data-ask={askOpen ? "open" : undefined}>
-      <div className="study-leftbg" aria-hidden="true" />
+      {/* one room behind everything: the canvas fills the screen, Tuck is framed inside .study-frame */}
+      <div className="study-stage"><StudyStage /></div>
+      <div className="study-frame" aria-hidden="true" />
       <div className="study-top" />
       {mounted && <TimerClock />}
       {mounted && <TimerControls />}
-      <div className="study-stage"><StudyStage /></div>
       {mounted && (
         <div className="study-bottom">
           {!askOpen && <MemoryChip />}

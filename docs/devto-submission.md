@@ -1,5 +1,5 @@
 ---
-title: "Tuck: a tiny acorn who turns \"ugh, my essay\" into one 25-minute goal"
+title: "Meet Tuck: a tiny acorn who turns \"ugh, my essay\" into one 25-minute goal"
 published: false
 tags: devchallenge, hf26challenge, ai, opensource
 cover_image: https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/01-hero.png
@@ -11,7 +11,7 @@ cover_image: https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/subm
 
 ## What I Built
 
-**Pocket Pal** is a calm Pomodoro timer with a focus partner: **Tuck**, a small 3D acorn in a leaf hat who sits beside your timer.
+Meet **Tuck**: a calm Pomodoro timer with a focus partner built in, a small 3D acorn in a leaf hat who sits beside your timer.
 
 The hard part of focusing usually isn't the 25 minutes. It's deciding what to do with them. So Tuck does that part:
 

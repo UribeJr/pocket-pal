@@ -121,6 +121,16 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 
 /* short landscape screens (phones on their side): the Ask panel may use nearly the full height */
 /* Ask Tuck open on desktop: the clock moves up and shrinks a little, so the panel grows below it, never over it */
+.top-actions { position: absolute; right: 0; top: 0; z-index: 10; display: flex; align-items: flex-start; gap: 2px; margin: max(env(safe-area-inset-top), 0.5rem) max(env(safe-area-inset-right), 0.5rem) 0 0; }
+.fs-hint { position: absolute; top: 48px; right: 4px; width: min(260px, 70vw); padding: 10px 12px; border-radius: 12px; background: #F7F5F1; color: #3E3C38; font: 400 13px/1.35 var(--font-study); box-shadow: 0 4px 16px rgba(60, 50, 40, .14); }
+/* phones on their side with the browser's bars showing: a smaller clock and tighter rows, so nothing overlaps */
+@media (max-height: 520px) {
+  .study[data-layout="desk"] .clock-digits { font-size: min(32cqi, 26vh); }
+  .study[data-layout="desk"] .study-controls { gap: 6px; }
+  .study[data-layout="desk"] .sessions-line { display: none; }
+  .study[data-layout="desk"] .study-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0.6rem); }
+  .study[data-layout="desk"] .focus-intent .field, .study[data-layout="desk"] .ask-pill { min-height: 38px !important; }
+}
 .study[data-layout="desk"][data-ask="open"] { grid-template-rows: 1.25rem auto auto minmax(0, 1fr); }
 .study[data-layout="desk"][data-ask="open"] .clock-digits { font-size: min(30cqi, 20vh); }
 /* while Ask Tuck is open on phones and short screens, the task/goal rows step aside for the panel and Tuck */

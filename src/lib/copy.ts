@@ -3,7 +3,7 @@
  * Tuck's lines stay short, warm and lowercase; interface labels are plain and calm.
  */
 export const copy = {
-  app: { name: "Pocket Pal", tagline: "Focus with Tuck", description: "Focus alongside Tuck, a tiny acorn who turns your task into one small goal and checks in when the timer ends." },
+  app: { name: "Tuck", headline: "Meet Tuck", tagline: "your focus partner", description: "Meet Tuck, a tiny acorn who turns your task into one small goal and checks in when the timer ends." },
 
   /** the focus-partner loop: intention at Start, goal during focus, "did you finish?" at the break */
   focus: {
@@ -82,10 +82,12 @@ export const copy = {
     timer: "Timer", focusMin: "Focus", shortMin: "Short break", longMin: "Long break", longEvery: "Long break after",
     sessions: "sessions", minutes: "min",
     autoStartBreaks: "Start breaks automatically", autoStartFocus: "Start focus automatically",
-    alerts: "Alerts", notify: "Notify me when a phase ends", notifyHint: "Only while Pocket Pal is in the background.",
+    alerts: "Alerts", notify: "Notify me when a phase ends", notifyHint: "Only while Tuck is in the background.",
     notifyBlocked: "Notifications are blocked in this browser.", sound: "Soft chime",
     memory: "Memory", memoryOpen: "What Tuck remembers",
   },
+
+  fullscreen: { enter: "Full screen", exit: "Exit full screen", iosHint: "For full screen on iPhone: tap Share, then “Add to Home Screen”, and open Tuck from there." },
 
   hint: { tap: "tap Tuck · hold to talk", sleeping: "tap to wake Tuck" },
 } as const;

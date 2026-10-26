@@ -4,9 +4,9 @@ import { copy } from "@/lib/copy";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: `${copy.app.name} · ${copy.app.tagline}`,
+  title: `${copy.app.headline} · ${copy.app.tagline}`,
   description: copy.app.description,
-  appleWebApp: { capable: true, title: "Pocket Pal", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Tuck", statusBarStyle: "black-translucent" },
   icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
 };
 

@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Pocket Pal — Study with Tuck", short_name: "Pocket Pal", description: "Study alongside Tuck, a tiny acorn who keeps you company while you focus.",
+    name: "Tuck — your focus partner", short_name: "Tuck", description: "Meet Tuck, a tiny acorn who turns your task into one small goal and checks in when the timer ends.",
     start_url: "/", scope: "/", display: "standalone", orientation: "any",
     background_color: "#D5D2CB", theme_color: "#D5D2CB",
     icons: [

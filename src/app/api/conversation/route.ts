@@ -1,6 +1,6 @@
 import { ConversationRequest } from "@/ai/schema";
 import { converse, fallback } from "@/ai/converse";
-import { GroqProvider } from "@/ai/provider";
+import { GROQ_BASE_URL, GroqProvider } from "@/ai/provider";
 import { RateLimiter } from "@/ai/rateLimit";
 import { originAllowed } from "@/ai/origin";
 
@@ -26,11 +26,13 @@ export async function POST(req: Request) {
   if (!ipLimiter.take(ip) || (parsed.data.deviceId && !deviceLimiter.take(parsed.data.deviceId))) return json(fallback("rate_limited", parsed.data.mode), 429);
 
   const key = process.env.GROQ_API_KEY;
-  if (process.env.AI_ENABLED === "false" || !key) return json(fallback("nokey", parsed.data.mode));
-  const provider = new GroqProvider(key, process.env.GROQ_MODEL || "openai/gpt-oss-20b");
+  // AI_BASE_URL points at any OpenAI-compatible server (e.g. Ollama running gpt-oss locally); without it, Groq
+  const base = process.env.AI_BASE_URL || GROQ_BASE_URL;
+  if (process.env.AI_ENABLED === "false" || (!key && base === GROQ_BASE_URL)) return json(fallback("nokey", parsed.data.mode));
+  const provider = new GroqProvider(key, process.env.GROQ_MODEL || "openai/gpt-oss-20b", base);
   // Groq rate-limits each model separately: a second model doubles the room before anyone sees "breather"
-  const spareModel = process.env.GROQ_FALLBACK_MODEL ?? "openai/gpt-oss-120b";
-  const spare = spareModel && spareModel !== provider.model ? new GroqProvider(key, spareModel) : undefined;
+  const spareModel = process.env.GROQ_FALLBACK_MODEL ?? (base === GROQ_BASE_URL ? "openai/gpt-oss-120b" : "");
+  const spare = spareModel && spareModel !== provider.model ? new GroqProvider(key, spareModel, base) : undefined;
   const res = await converse(parsed.data, provider, { fallback: spare, log: (l) => console.log(JSON.stringify(l)) });
   return json(res);
 }

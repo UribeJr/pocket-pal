@@ -15,7 +15,10 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
     const page = await ctx.newPage(); const errors = []; let reacts = 0; let convo = 0;
     page.on("pageerror", (e) => errors.push(String(e))); page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
     page.on("request", (q) => { if (q.url().includes("/api/react")) reacts++; if (q.url().includes("/api/conversation")) convo++; });
-    await page.route("**/api/conversation", (route) => route.fulfill({ status: 200, contentType: "application/json", body: studyFixture }));
+    const momentFixture = (m) => m === "start" ? JSON.stringify({ ok: true, reply: { dialogue: "Let's draft the intro. Just that.", emotion: "excited", action: "none", memory_candidate: null }, answer: "", goal: "Draft the intro paragraph" })
+      : m === "checkin" ? JSON.stringify({ ok: true, reply: { dialogue: "You did it! Next up: one argument.", emotion: "excited", action: "none", memory_candidate: null }, answer: "", goal: "Write the first argument" })
+      : studyFixture;
+    await page.route("**/api/conversation", (route) => route.fulfill({ status: 200, contentType: "application/json", body: momentFixture(JSON.parse(route.request().postData() ?? "{}").moment) }));
     const ready = async () => { await page.waitForFunction(() => !!window.__pocketPal?.controller, null, { timeout: 30000 }); await page.waitForTimeout(800); };
     const shot = (n) => bname === "chromium" ? page.screenshot({ path: `screenshots/study-${mode}-${n}.png` }) : null;
     const advance = async (ms) => { await page.evaluate((ms) => window.__pocketPal.clock.advance(ms), ms); await page.waitForTimeout(1600); };
@@ -111,11 +114,27 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
       check(r, (await readout(page)).status === "ready", "reset -> ready focus");
       check(r, reacts === 0, `timer moments never call the AI (${reacts} /api/react calls)`);
 
-      // ---- Ask Tuck: a study answer renders, Tuck's bubble gets the short line ----
+      // ---- focus partner: task -> goal at Start; "did you finish?" at the break -> next goal ----
+      await page.fill('[data-testid="focus-task"]', "my history essay");
+      await page.click('[data-testid="focus-start"]');
+      const goal1 = await page.waitForSelector('[data-testid="focus-goal"]', { timeout: 8000 }).then((h) => h.textContent()).catch(() => "");
+      check(r, /Draft the intro paragraph/.test(goal1 ?? ""), `Start with a task -> goal line (${goal1})`);
+      await advance(25 * 60e3);
+      const card = await page.waitForSelector('[data-testid="checkin"]', { timeout: 8000 }).then(() => true).catch(() => false);
+      check(r, card, "focus done -> 'did you finish?' card");
+      if (card) {
+        await page.click('[data-testid="checkin-yes"]');
+        const goal2 = await page.waitForFunction(() => document.querySelector('[data-testid="focus-goal"]')?.textContent?.includes("Write the first argument"), null, { timeout: 8000 }).then(() => true).catch(() => false);
+        check(r, goal2, "check-in answer -> Tuck suggests the next goal");
+        const said = await page.waitForFunction(() => window.__pocketPal.store.getState().speech?.startsWith("You did it"), null, { timeout: 15000 }).then(() => true).catch(() => false);
+        check(r, said, "Tuck says the check-in line");
+      }
+      page.once("dialog", (d) => d.accept());
+      await page.click('[data-testid="focus-cancel"]'); await page.waitForTimeout(500);
+
+      // ---- Ask Tuck: a chip sends on one tap and stays; the answer renders, Tuck's bubble gets the short line ----
       await page.click('[data-testid="ask-open"]');
-      await page.fill('[data-testid="ask-subject"]', "cell biology");
-      await page.fill('[data-testid="chat-input"]', "explain mitosis");
-      await page.keyboard.press("Enter");
+      await page.click('[data-testid="ask-chips"] button >> nth=0');
       const ans = await page.waitForSelector('[data-testid="ask-answer"] li', { timeout: 8000 }).then(() => true).catch(() => false);
       check(r, ans && (await page.$$('[data-testid="ask-answer"] li')).length === 3, "study answer renders as a list");
       // a timer celebration may still be speaking; the reply's line follows once it ends
@@ -123,7 +142,8 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
       check(r, bubble === "okay, three steps.", `speech bubble shows the short line (${bubble})`);
       await shot("ask");
       await page.keyboard.press("Escape");
-      check(r, convo === 1, `one conversation request (${convo})`);
+      check(r, (await page.$$('[data-testid="ask-chips"] button')).length === 3, "chips stay visible after use");
+      check(r, convo === 3, `three conversation requests: start, check-in, chip (${convo})`);
       await page.evaluate(() => window.__pocketPal.clock.reset());
       const errs = errors.filter((e) => !/GPU stall|WebGL.*(warning|performance)/i.test(e));
       check(r, !errs.length, `console errors: ${errs.join(" | ") || "none"}`);

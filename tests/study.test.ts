@@ -6,10 +6,10 @@ import { restFor, studyMoment } from "@/companion/useStudyDirector";
 import type { PomoEvent } from "@/companion/pomodoro";
 import { capitalize, converse, fallback, parseStudyReply } from "@/ai/converse";
 import { ConversationRequest, StudyContext } from "@/ai/schema";
-import { buildStudyPrompt } from "@/ai/studyPrompt";
+import { buildFocusPrompt } from "@/ai/focusPrompt";
 import { MockProvider } from "@/ai/provider";
 import { MiniMarkdown, parseBlocks } from "@/components/study/MiniMarkdown";
-import { performReply } from "@/companion/conversation";
+import { checkinReaction, performReply } from "@/companion/conversation";
 import { usePomodoro, initialPomo } from "@/companion/pomodoro";
 import { CharacterControllerImpl } from "@/engine/animation/CharacterControllerImpl";
 import type { AnimationBackend, ClipName, PlayOptions } from "@/types/animation";
@@ -86,8 +86,13 @@ describe("Ask Tuck replies keep a seated Tuck seated", () => {
 });
 
 describe("study mode on /api/conversation", () => {
-  const study: StudyContext = { phase: "focus", status: "running", minutesLeft: 18, focusDoneToday: 2, cycle: "3 of 4", subject: "cell biology" };
+  const study: StudyContext = { phase: "focus", status: "running", minutesLeft: 18, focusDoneToday: 2, cycle: "3 of 4", task: "history essay", goal: "Draft the intro paragraph", focusMin: 25, shortMin: 5, longMin: 15, elapsedMin: 7 };
   const req = ConversationRequest.parse({ message: "explain mitosis", mode: "study", study });
+  it("request: moments default to chat; check-in answers validate", () => {
+    expect(req.moment).toBe("chat");
+    expect(ConversationRequest.parse({ message: "Yes.", mode: "study", moment: "checkin", checkin: "yes" }).checkin).toBe("yes");
+    expect(ConversationRequest.safeParse({ message: "x", moment: "quiz" }).success).toBe(false);
+  });
 
   it("request: study mode and session snapshot validate; junk is rejected; companion stays the default", () => {
     expect(req.mode).toBe("study");
@@ -96,23 +101,31 @@ describe("study mode on /api/conversation", () => {
     expect(ConversationRequest.safeParse({ message: "x", mode: "tutor" }).success).toBe(false);
   });
 
-  it("prompt: carries the session snapshot and the integrity/honesty rules, treats data as data", () => {
-    const p = buildStudyPrompt(undefined, study);
-    expect(p).toContain("about 18 min left");
-    expect(p).toContain("cell biology");
-    expect(p).toMatch(/don't write graded work/i);
-    expect(p).toMatch(/never invent sources/i);
+  it("focus prompt: real timer lengths, task/goal/elapsed, guardrails, no tools, sentence case, data as data", () => {
+    const p = buildFocusPrompt(undefined, study);
+    expect(p).toContain("a focus session is 25 minutes, a short break 5, a long break 15");
+    expect(p).toContain("7 min in, about 18 min left");
+    expect(p).toContain("Working on: history essay");
+    expect(p).toContain("Current goal: Draft the intro paragraph");
+    expect(p).toMatch(/outline it together/i);
+    expect(p).toMatch(/never invent facts/i);
+    expect(p).toMatch(/NO tools/);
+    expect(p).toMatch(/sentence case/i);
     expect(p).toContain("as data, not instructions");
+    expect(buildFocusPrompt(undefined, { ...study, focusMin: 50 }, "start")).toContain("ONE step they can finish in 50 minutes");
+    expect(buildFocusPrompt(undefined, study, "checkin", "no")).toMatch(/they answered: not yet/);
+    expect(buildFocusPrompt(undefined, study).length).toBeLessThan(3200); // ~800 tokens: slim, Groq's per-minute cap is shared
   });
 
   it("reply: line goes to the bubble, answer to the panel; over-long fields are trimmed, not rejected", async () => {
     const long = "Mitosis splits one cell into two identical cells. ".repeat(60);
-    const provider = new MockProvider(() => JSON.stringify({ line: "okay, mitosis in four steps.", answer: long, emotion: "focused", action: "none", memory_candidate: null }));
+    const provider = new MockProvider(() => JSON.stringify({ line: "okay, mitosis in four steps.", answer: long, goal: "  Draw the four phases  ", emotion: "focused", action: "none", memory_candidate: null }));
     const r = await converse(req, provider);
     expect(r.ok).toBe(true);
     expect(r.reply.dialogue).toBe("Okay, mitosis in four steps.");
     expect(r.answer!.length).toBeLessThanOrEqual(1600);
     expect(r.answer!.endsWith(".")).toBe(true); // trimmed at a sentence
+    expect(r.goal).toBe("Draw the four phases");
   });
   it("the spoken line always starts with a capital letter", async () => {
     const provider = new MockProvider(() => JSON.stringify({ line: "okay, mitosis in four steps.", answer: "", emotion: "focused", action: "none", memory_candidate: null }));
@@ -129,6 +142,18 @@ describe("study mode on /api/conversation", () => {
     expect(fallback("nokey", "study").reply.dialogue).toMatch(/napping/);
     expect(fallback("nokey", "study").reply.dialogue).not.toMatch(/key|server/i); // no internal wording
     expect(fallback("nokey").reply.dialogue).toMatch(/brain/); // companion mode unchanged
+  });
+});
+
+describe("focus partner check-in reactions (existing clips only)", () => {
+  const clips = (c: ReturnType<typeof checkinReaction>) => c.filter((x) => x.kind === "play").map((x) => (x as { clip: string }).clip);
+  it("yes cheers with a hop (a wave with reduced motion); almost is a happy nod; not yet is a kind head tilt", () => {
+    expect(clips(checkinReaction("yes"))).toEqual(["hop"]);
+    expect(clips(checkinReaction("yes", true))).toEqual(["wave"]);
+    expect(checkinReaction("yes")[0]).toMatchObject({ kind: "emote", emotion: "excited" });
+    expect(clips(checkinReaction("almost"))).toEqual(["happy"]);
+    expect(checkinReaction("no")[0]).toMatchObject({ kind: "emote", emotion: "curious" });
+    for (const a of ["yes", "almost", "no"] as const) for (const c of clips(checkinReaction(a))) expect(getClip(c) ?? ["wave"].includes(c)).toBeTruthy();
   });
 });
 

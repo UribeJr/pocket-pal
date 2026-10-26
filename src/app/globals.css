@@ -108,6 +108,8 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 }
 .field { width: 100%; min-height: 44px; border-radius: 12px; border: 1px solid #CFCAC2; background: #FFFFFF; padding: 10px 14px; font: 400 15px/1.35 var(--font-study); color: #3E3C38; }
 .field::placeholder { color: #6F6B63; }
+.focus-intent { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(340px, 90%); }
+.goal-line { max-width: min(340px, 90%); text-align: center; font: 400 14px/1.35 var(--font-study); color: #3E3C38; }
 .chip { min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #CFCAC2; background: #FFFFFF; font: 500 13px/1 var(--font-study); color: #3E3C38; cursor: pointer; }
 .chip:hover { border-color: #8FA68A; }
 .prose-tuck p { margin: 0 0 .55em; }
@@ -119,7 +121,12 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 .prose-tuck code { font-size: .92em; background: #ECE8E1; border-radius: 5px; padding: 0 .3em; }
 
 /* short landscape screens (phones on their side): the Ask panel may use nearly the full height */
-@media (max-height: 520px) { .ask-panel-desk { max-height: calc(100dvh - 1.5rem) !important; } }
+/* Ask Tuck open on desktop: the clock moves up and shrinks a little, so the panel grows below it, never over it */
+.study[data-layout="desk"][data-ask="open"] { grid-template-rows: 1.25rem auto auto minmax(0, 1fr); }
+.study[data-layout="desk"][data-ask="open"] .clock-digits { font-size: min(30cqi, 20vh); }
+/* while Ask Tuck is open on phones and short screens, the task/goal rows step aside for the panel and Tuck */
+.study[data-layout="pocket"][data-ask="open"] :is(.focus-intent, .goal-line, .sessions-line) { display: none; }
+@media (max-height: 600px) { .study[data-ask="open"] :is(.focus-intent, .goal-line, .sessions-line) { display: none; } }
 
 .fade-up { animation: fade-up .22s ease-out both; }
 @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

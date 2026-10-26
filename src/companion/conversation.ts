@@ -1,6 +1,6 @@
 "use client";
 import { create } from "zustand";
-import type { CharacterController } from "@/types/companion";
+import type { BehaviorCommand, CharacterController } from "@/types/companion";
 import { PRIORITY } from "@/types/companion";
 import { actionCommands } from "@/ai/actions";
 import { fallback } from "@/ai/converse";
@@ -23,11 +23,15 @@ type Candidate = NonNullable<ConversationResponse["reply"]["memory_candidate"]>;
 interface ChatState {
   messages: ChatMessage[]; pending: boolean; open: boolean; setOpen(o: boolean): void;
   candidate: Candidate | null; facts: Fact[]; memoryOn: boolean; sheet: boolean;
-  /** what the user says they're studying (this visit only; never stored) */
-  subject: string;
+  /** what the user says they're working on, and the one goal Tuck set for this session (this visit only) */
+  task: string; goal: string;
+  /** the goal `goal` was set for (a changed task asks Tuck for a fresh goal) */
+  goalFor: string;
+  /** "did you finish?" card after a focus session; `checking` while Tuck answers it */
+  checkinOpen: boolean; checking: boolean;
 }
-/** Ask Tuck lives for this visit only: messages and subject are kept in memory, never persisted. */
-export const useChatStore = create<ChatState>((set) => ({ messages: [], pending: false, open: false, setOpen: (open) => set({ open }), candidate: null, facts: [], memoryOn: true, sheet: false, subject: "" }));
+/** Ask Tuck lives for this visit only: messages, task and goal are kept in memory, never persisted. */
+export const useChatStore = create<ChatState>((set) => ({ messages: [], pending: false, open: false, setOpen: (open) => set({ open }), candidate: null, facts: [], memoryOn: true, sheet: false, task: "", goal: "", goalFor: "", checkinOpen: false, checking: false }));
 
 // ---- long-term memory (user-confirmed facts only) ----
 let store: MemoryStore | null = null;
@@ -82,15 +86,20 @@ export function buildContext(message?: string): ContextSnapshot {
 /** the session snapshot sent with a question: taken once at send time, never streamed */
 export function buildStudyContext(): StudyContext {
   const p = usePomodoro.getState();
-  const subject = useChatStore.getState().subject.trim().slice(0, 80);
+  const { task, goal } = useChatStore.getState();
   const n = Math.min(p.focusDone + 1, p.settings.longEvery);
+  const left = remainingMs(p, clock.now());
+  const mins = (v: number) => Math.min(240, Math.max(1, Math.round(v)));
   return {
     phase: p.phase === "focus" ? "focus" : p.phase === "short" ? "short_break" : "long_break",
     status: p.status,
-    minutesLeft: Math.min(240, Math.round(remainingMs(p, clock.now()) / 60000)),
+    minutesLeft: Math.min(240, Math.round(left / 60000)),
     focusDoneToday: Math.min(99, p.completedToday),
     cycle: `${n} of ${p.settings.longEvery}`,
-    ...(subject ? { subject } : {}),
+    focusMin: mins(p.settings.focusMin), shortMin: mins(p.settings.shortMin), longMin: mins(p.settings.longMin),
+    elapsedMin: p.status === "ready" ? 0 : Math.min(240, Math.max(0, Math.round((p.durationMs - left) / 60000))),
+    ...(task.trim() ? { task: task.trim().slice(0, 120) } : {}),
+    ...(goal.trim() ? { goal: goal.trim().slice(0, 120) } : {}),
   };
 }
 
@@ -123,6 +132,63 @@ async function performWhenFree(res: ConversationResponse) {
   if (live) await performReply(live, res);
 }
 
+/** one request to /api/conversation in focus-partner mode (offline, quota and network failures become fallbacks) */
+async function callTuck(extra: { message: string; history?: ChatTurn[]; moment?: "start" | "checkin" | "chat"; checkin?: "yes" | "almost" | "no" }, fetcher: typeof fetch = fetch): Promise<ConversationResponse> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return fallback("offline", "study");
+    if (!takeDeviceQuota()) return fallback("rate_limited", "study");
+    const r = await fetcher("/api/conversation", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ history: [], ...extra, context: buildContext(extra.message), mode: "study", study: buildStudyContext(), deviceId: deviceId() }),
+      signal: AbortSignal.timeout(12000),
+    });
+    const body = (await r.json().catch(() => null)) as ConversationResponse | null;
+    return body?.reply?.dialogue ? body : fallback("unavailable", "study");
+  } catch {
+    return fallback(typeof navigator !== "undefined" && navigator.onLine === false ? "offline" : "unavailable", "study");
+  }
+}
+
+/**
+ * Start a focus session with an intention: the timer starts at once; Tuck turns the task into one goal
+ * that fits the session (his bubble says it). A failed call quietly keeps the user's own words as the goal.
+ * A goal Tuck already suggested for this same task (at the last check-in) is used as is, with no call.
+ */
+export async function startFocus(fetcher: typeof fetch = fetch) {
+  const p = usePomodoro.getState();
+  const { task, goal, goalFor } = useChatStore.getState();
+  p.start();
+  const t = task.trim();
+  if (!t || (goal && goalFor === t)) return;
+  useChatStore.setState({ goal: "", goalFor: t });
+  const res = await callTuck({ message: t.slice(0, 500), moment: "start" }, fetcher);
+  if (useChatStore.getState().goalFor !== t) return; // the task changed meanwhile
+  useChatStore.setState({ goal: (res.ok && res.goal) || t.slice(0, 120) });
+  if (res.ok) void performWhenFree(res);
+}
+
+/** the "did you finish?" answer: Tuck reacts with his body at once, then says a line and suggests the next goal */
+export async function answerCheckin(answer: "yes" | "almost" | "no", fetcher: typeof fetch = fetch) {
+  const { goal, checking } = useChatStore.getState();
+  if (checking) return;
+  useChatStore.setState({ checkinOpen: false, checking: true });
+  const ctl = getActiveController();
+  const reacting = ctl ? ctl.run(checkinReaction(answer, typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches), PRIORITY.user, "checkin") : Promise.resolve();
+  const label = answer === "yes" ? "Yes, I finished it." : answer === "almost" ? "Almost." : "Not yet.";
+  const res = await callTuck({ message: `${label}${goal ? ` (goal: ${goal})` : ""}`.slice(0, 500), moment: "checkin", checkin: answer }, fetcher);
+  useChatStore.setState({ checking: false, ...(res.ok && res.goal ? { goal: res.goal, goalFor: useChatStore.getState().task.trim() } : {}) });
+  await reacting; // let the hop / nod / head tilt finish before he speaks
+  if (res.ok) void performWhenFree(res);
+}
+
+/** pure: Tuck's body answer to "did you finish?" (existing clips only; the model never picks these) */
+export function checkinReaction(answer: "yes" | "almost" | "no", reduced = false): BehaviorCommand[] {
+  if (answer === "yes") return [{ kind: "emote", emotion: "excited", hold: 4 }, { kind: "lookAt", target: CAMERA }, { kind: "play", clip: reduced ? "wave" : "hop", fallback: ["happy"] }];
+  if (answer === "almost") return [{ kind: "emote", emotion: "content", hold: 4 }, { kind: "lookAt", target: CAMERA }, { kind: "play", clip: "happy", fallback: ["weightShift"] }];
+  // a kind head tilt: look a little up and to the side, curious face, settle
+  return [{ kind: "emote", emotion: "curious", hold: 4 }, { kind: "lookAt", target: { x: 1.4, y: 2.1, z: 4 } }, { kind: "play", clip: "weightShift", fallback: ["idle"], hold: 1.2 }];
+}
+
 /** what a Tuck turn looks like when sent back as history (spoken line + answer, within the 2,000 cap) */
 const historyText = (m: ChatMessage) => (m.answer ? `${m.text}\n\n${m.answer}` : m.text).slice(0, 2000);
 
@@ -139,22 +205,8 @@ export async function sendMessage(text: string, fetcher: typeof fetch = fetch): 
   if (ctl && ctl.emotions.emotion === "sleepy") ctl.setEmotion("content", PRIORITY.user, 0);
   // thinking: focused face, look at the user, hold still (seated if a session is running)
   void ctl?.run([{ kind: "emote", emotion: "focused", hold: 20 }, { kind: "lookAt", target: CAMERA }, { kind: "play", clip: studying() ? "sitIdle" : "idle", hold: 20 }], PRIORITY.user, "thinking");
-  let res: ConversationResponse;
-  try {
-    if (typeof navigator !== "undefined" && navigator.onLine === false) res = fallback("offline", "study");
-    else if (!takeDeviceQuota()) res = fallback("rate_limited", "study");
-    else {
-      const r = await fetcher("/api/conversation", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, history, context: buildContext(message), mode: "study", study: buildStudyContext(), deviceId: deviceId() }),
-        signal: AbortSignal.timeout(12000),
-      });
-      const body = (await r.json().catch(() => null)) as ConversationResponse | null;
-      res = body?.reply?.dialogue ? body : fallback("unavailable", "study");
-    }
-  } catch {
-    res = fallback(typeof navigator !== "undefined" && navigator.onLine === false ? "offline" : "unavailable", "study");
-  }
+  const res = await callTuck({ message, history }, fetcher);
+  if (res.ok && res.goal) useChatStore.setState({ goal: res.goal, goalFor: useChatStore.getState().task.trim() });
   const reply: ChatMessage = { id: ++seq, role: "tuck", text: res.reply.dialogue, answer: res.ok ? res.answer || undefined : undefined, failed: res.ok ? undefined : res.reason ?? "unavailable" };
   useChatStore.setState((s) => ({ pending: false, messages: [...s.messages, reply].slice(-30) }));
   const c = res.ok ? res.reply.memory_candidate : null;

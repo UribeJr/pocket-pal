@@ -3,7 +3,18 @@
  * Tuck's lines stay short, warm and lowercase; interface labels are plain and calm.
  */
 export const copy = {
-  app: { name: "Pocket Pal", tagline: "Study with Tuck", description: "Study alongside Tuck, a tiny acorn who keeps you company while you focus." },
+  app: { name: "Pocket Pal", tagline: "Focus with Tuck", description: "Focus alongside Tuck, a tiny acorn who turns your task into one small goal and checks in when the timer ends." },
+
+  /** the focus-partner loop: intention at Start, goal during focus, "did you finish?" at the break */
+  focus: {
+    taskPlaceholder: "What are you working on?",
+    taskLabel: "What are you working on? Tuck turns it into one goal for this session",
+    settingGoal: "Tuck is picking a goal…",
+    goal: "Goal",
+    next: "Next",
+    checkinQuestion: (goal: string) => `Did you finish: ${goal}?`,
+    yes: "Yes", almost: "Almost", notYet: "Not yet",
+  },
 
   phase: { focus: "Focus", short: "Short break", long: "Long break" },
   status: { ready: "Ready", paused: "Paused" },
@@ -41,19 +52,17 @@ export const copy = {
 
   ask: {
     entry: "Ask Tuck…",
-    entryLabel: "Ask Tuck for study help",
+    entryLabel: "Ask Tuck for help focusing",
     title: "Ask Tuck",
     close: "Close Ask Tuck",
-    placeholder: "Ask about what you're studying…",
+    placeholder: "Tell Tuck what's up…",
     thinking: "Tuck is thinking…",
     send: "Send",
-    subject: "What are you studying?",
-    subjectPlaceholder: "e.g. cell biology",
-    empty: "I can explain a topic, plan your session, or quiz you.",
+    empty: "Stuck, distracted, or need a plan? I'm right here.",
     chips: [
-      { label: "Explain", prompt: "Can you explain " },
-      { label: "Plan my session", prompt: "Help me plan this study session." },
-      { label: "Quiz me", prompt: "Quiz me on what I'm studying, one question at a time." },
+      { label: "Plan this session", prompt: "Help me plan this focus session." },
+      { label: "I'm stuck", prompt: "I'm stuck." },
+      { label: "I'm distracted", prompt: "I'm distracted." },
     ],
     visitOnly: "This conversation isn't saved after you leave.",
     failure: "Oops, Tuck lost his train of thought.",

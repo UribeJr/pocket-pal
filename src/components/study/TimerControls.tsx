@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { copy } from "@/lib/copy";
 import { clock } from "@/engine/simulation/clock";
 import { remainingMs, usePomodoro } from "@/companion/pomodoro";
+import { startFocus } from "@/companion/conversation";
+import { FocusIntent } from "./FocusIntent";
 
 /** one primary action (Start / Pause / Resume) and two quiet ones (Reset, Skip) beneath the clock */
 export function TimerControls() {
@@ -13,7 +15,7 @@ export function TimerControls() {
 
   const primary = () => {
     const p = pomo();
-    if (p.status === "ready") p.start(); else if (p.status === "running") p.pause(); else p.resume();
+    if (p.status === "ready") { if (p.phase === "focus") void startFocus(); else p.start(); } else if (p.status === "running") p.pause(); else p.resume();
   };
   const reset = () => {
     const p = pomo();
@@ -50,7 +52,8 @@ export function TimerControls() {
           {copy.controls.skip}
         </button>
       </div>
-      <p className="h-4 text-[12px] text-mute" aria-live="off">{completedToday > 0 ? copy.doneToday(completedToday) : ""}</p>
+      <FocusIntent />
+      <p className="sessions-line h-4 text-[12px] text-mute" aria-live="off">{completedToday > 0 ? copy.doneToday(completedToday) : ""}</p>
     </div>
   );
 }

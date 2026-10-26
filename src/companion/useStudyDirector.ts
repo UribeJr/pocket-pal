@@ -7,6 +7,7 @@ import { getActiveController } from "@/engine/activeController";
 import { useCompanionStore } from "@/stores/companionStore";
 import { copy, pickLine } from "@/lib/copy";
 import { onPomodoroEvents, usePomodoro, type PomoEvent, type PomoEventType } from "./pomodoro";
+import { useChatStore } from "./conversation";
 
 const USER: Vec3Like = { x: 0, y: 1.2, z: 6 };
 /** where the clock is, seen from Tuck: to his right in the two-column layout, above him on phones */
@@ -99,6 +100,12 @@ export function directStudy() {
   const m = studyMoment(unseen, { reduced: reducedMotion(), clock: clockTarget() });
   st.markActed(Math.max(...unseen.map((e) => e.id)));
   if (!m) return;
+  const chat = useChatStore.getState();
+  // with a task, Tuck's own goal line follows from the AI: skip the generic "let's focus" line
+  if (m.label === "study:focusStart" && chat.task.trim()) m.cmds = m.cmds.filter((c) => c.kind !== "say");
+  // a finished focus session with a goal: ask "did you finish?"
+  if (unseen.some((e) => e.type === "focusCompleted") && chat.goal) useChatStore.setState({ checkinOpen: true });
+  if (unseen.some((e) => e.type === "focusStarted" || e.type === "reset")) useChatStore.setState({ checkinOpen: false });
   if (ctl.emotions.emotion === "sleepy") ctl.setEmotion("content", PRIORITY.system, 0);
   void ctl.run(m.cmds, PRIORITY.system, m.label).then(() => {
     if (m.emotionAfter) ctl.setEmotion(m.emotionAfter, PRIORITY.system, Infinity);

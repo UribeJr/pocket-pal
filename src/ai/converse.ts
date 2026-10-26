@@ -1,7 +1,7 @@
 import { vetCandidate } from "./memoryFilter";
 import { StudyReply, STUDY_REPLY_JSON_SCHEMA, TuckReply, TUCK_REPLY_JSON_SCHEMA, type ConversationRequest, type ConversationResponse, type FallbackReason } from "./schema";
 import { buildMessages, buildSystemPrompt } from "./prompt";
-import { buildStudyPrompt } from "./studyPrompt";
+import { buildFocusPrompt } from "./focusPrompt";
 import { ProviderError, type LlmProvider } from "./provider";
 
 export const FALLBACK_LINES: Record<FallbackReason, string> = {
@@ -42,7 +42,7 @@ export function parseStudyReply(text: string): { reply: StudyReply; recovered: b
   let raw: Record<string, unknown> | undefined;
   try { raw = JSON.parse(text); } catch { raw = undefined; }
   if (raw && typeof raw === "object") {
-    const fixed = { ...raw, line: typeof raw.line === "string" ? trimTo(raw.line.trim(), 120) : raw.line, answer: typeof raw.answer === "string" ? trimTo(raw.answer.trim(), 1600) : raw.answer };
+    const fixed = { ...raw, line: typeof raw.line === "string" ? trimTo(raw.line.trim(), 120) : raw.line, answer: typeof raw.answer === "string" ? trimTo(raw.answer.trim(), 1600) : raw.answer, goal: typeof raw.goal === "string" ? trimTo(raw.goal.trim(), 120) : "" };
     const ok = StudyReply.safeParse(fixed);
     if (ok.success) return { reply: ok.data, recovered: false };
   }
@@ -50,7 +50,7 @@ export function parseStudyReply(text: string): { reply: StudyReply; recovered: b
   const answer = typeof raw?.answer === "string" ? raw.answer : "";
   if (typeof line === "string" && line.trim()) {
     const clean = (v: string, n: number) => trimTo(v.replace(/[<>{}`]/g, "").trim(), n);
-    return { reply: { line: clean(line.replace(/\s+/g, " "), 120), answer: clean(answer, 1600), emotion: "content", action: "none", memory_candidate: null }, recovered: true };
+    return { reply: { line: clean(line.replace(/\s+/g, " "), 120), answer: clean(answer, 1600), goal: "", emotion: "content", action: "none", memory_candidate: null }, recovered: true };
   }
   return null;
 }
@@ -80,8 +80,8 @@ export interface ConverseOptions { timeoutMs?: number; budgetMs?: number; retrie
  */
 export async function converse(req: ConversationRequest, provider: LlmProvider, o: ConverseOptions = {}): Promise<ConversationResponse> {
   const study = req.mode === "study";
-  const { timeoutMs = 8000, budgetMs = study ? 9000 : 7000, retries = 2, maxTokens = study ? 600 : 400, fallback: spare, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = o;
-  const system = study ? buildStudyPrompt(req.context, req.study) : buildSystemPrompt(req.context);
+  const { timeoutMs = 8000, budgetMs = study ? 9000 : 7000, retries = 2, maxTokens = study ? 450 : 400, fallback: spare, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = o;
+  const system = study ? buildFocusPrompt(req.context, req.study, req.moment, req.checkin) : buildSystemPrompt(req.context);
   const messages = buildMessages(req.history, req.message);
   const t0 = Date.now();
   const fb = (r: FallbackReason) => fallback(r, req.mode);
@@ -99,7 +99,7 @@ export async function converse(req: ConversationRequest, provider: LlmProvider, 
         if (!parsed) return fb("unavailable");
         const r = parsed.reply;
         const reply = { dialogue: capitalize(r.line), emotion: r.emotion, action: r.action, memory_candidate: vetCandidate(r.memory_candidate, req.message) };
-        return { ok: true, reply, answer: r.answer, recovered: parsed.recovered || undefined };
+        return { ok: true, reply, answer: r.answer, goal: r.goal.trim() || undefined, recovered: parsed.recovered || undefined };
       }
       const parsed = parseReply(res.text);
       log({ ...base, outcome: parsed ? (parsed.recovered ? "recovered" : "ok") : "invalid" });

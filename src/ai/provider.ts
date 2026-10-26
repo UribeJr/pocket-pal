@@ -14,17 +14,23 @@ export class ProviderError extends Error {
   get retryable() { return this.kind === "server" || this.kind === "bad_output" || this.kind === "network"; }
 }
 
-/** Groq via its OpenAI-compatible REST API (no SDK). Key is read server-side only. */
+export const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
+
+/**
+ * Groq via its OpenAI-compatible REST API (no SDK). Key is read server-side only. Any other
+ * OpenAI-compatible server (Ollama, LM Studio, vLLM) running the same open-weight model works through
+ * `baseUrl`; local servers usually need no key.
+ */
 export class GroqProvider implements LlmProvider {
-  readonly name = "groq";
-  constructor(private apiKey: string, readonly model: string) {}
+  readonly name: string;
+  constructor(private apiKey: string | undefined, readonly model: string, private baseUrl = GROQ_BASE_URL) { this.name = baseUrl === GROQ_BASE_URL ? "groq" : "openai-compatible"; }
   async generate(req: LlmRequest): Promise<LlmResult> {
     let res: Response;
     try {
-      res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      res = await fetch(`${this.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
         method: "POST",
         signal: req.signal,
-        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+        headers: { ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}), "Content-Type": "application/json" },
         body: JSON.stringify({
           model: this.model,
           messages: [{ role: "system", content: req.system }, ...req.messages],

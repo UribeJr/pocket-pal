@@ -61,7 +61,6 @@ export function AskTuck() {
 function AskTuckPanel() {
   const messages = useChatStore((s) => s.messages);
   const pending = useChatStore((s) => s.pending);
-  const subject = useChatStore((s) => s.subject);
   const layout = useCompanionStore((s) => s.layout);
   const [text, setText] = useState("");
   const input = useRef<HTMLInputElement>(null);
@@ -75,37 +74,29 @@ function AskTuckPanel() {
   };
   const desk = layout === "desk";
   return (
-    <div className={desk ? "relative w-full max-w-[400px]" : "w-full"}>
+    <div className={desk ? "flex max-h-full min-h-0 w-full max-w-[400px] flex-col justify-end" : "w-full"}>
       <section
         role="region" aria-label={copy.ask.title} data-testid="talk-popover"
         onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); closeConversation(); } }}
-        className={`panel fade-up flex flex-col overflow-hidden ${desk ? "ask-panel-desk absolute inset-x-0 bottom-0 max-h-[min(60vh,560px)]" : "max-h-[50dvh]"}`}
+        className={`panel fade-up flex flex-col overflow-hidden ${desk ? "ask-panel-desk max-h-full" : "max-h-[50dvh]"}`}
       >
         <header className="flex items-center gap-2 border-b border-[#E5E1DA] px-4 py-2">
-          <h2 className="text-[15px] font-medium">{copy.ask.title}</h2>
-          <input
-            className="ml-1 min-w-0 flex-1 rounded-full bg-transparent px-2 py-1 text-[13px] text-mute outline-none placeholder:text-[#6F6B63] focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-[#B9B4AC]"
-            value={subject} maxLength={80} placeholder={copy.ask.subjectPlaceholder} aria-label={copy.ask.subject} data-testid="ask-subject"
-            onChange={(e) => useChatStore.setState({ subject: e.target.value })}
-          />
+          <h2 className="flex-1 text-[15px] font-medium">{copy.ask.title}</h2>
           <button type="button" className="icon-btn !h-9 !w-9 shrink-0" aria-label={copy.ask.close} onClick={closeConversation}>✕</button>
         </header>
         <div ref={log} role="log" aria-live="polite" aria-relevant="additions" className="flex min-h-[96px] flex-1 flex-col gap-2 overflow-y-auto px-4 py-3" data-testid="ask-log">
-          {messages.length === 0 && (
-            <div className="flex flex-col gap-2.5">
-              <p className="text-[14px] text-mute">{copy.ask.empty}</p>
-              <div className="flex flex-wrap gap-2">
-                {copy.ask.chips.map((c) => (
-                  <button key={c.label} type="button" className="chip" onClick={() => { setText(c.prompt); input.current?.focus(); }}>{c.label}</button>
-                ))}
-              </div>
-            </div>
-          )}
+          {messages.length === 0 && <p className="text-[14px] text-mute">{copy.ask.empty}</p>}
           {messages.map((m) => <Message key={m.id} m={m} />)}
           {pending && <p className="text-[13px] text-mute" data-testid="ask-pending">{copy.ask.thinking}</p>}
         </div>
         {/* "Tuck will remember…" lives inside the panel while it is open, so nothing can cover it */}
         <div className="flex justify-center px-3 empty:hidden"><MemoryChip /></div>
+        {/* one tap sends; the chips stay for the next time you're stuck */}
+        <div className="flex flex-wrap gap-2 px-3 pt-2" data-testid="ask-chips">
+          {copy.ask.chips.map((c) => (
+            <button key={c.label} type="button" className="chip" disabled={pending} onClick={() => void sendMessage(c.prompt)}>{c.label}</button>
+          ))}
+        </div>
         <form onSubmit={submit} className="flex items-center gap-2 border-t border-[#E5E1DA] px-3 py-2">
           <input
             ref={input} className="field !min-h-10 flex-1 !rounded-full !py-2" value={text} maxLength={500}

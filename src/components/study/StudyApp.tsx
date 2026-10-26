@@ -47,7 +47,7 @@ export function StudyApp({ forced }: { forced?: LayoutMode }) {
   useEffect(() => setMounted(true), []);
 
   return (
-    <main className="study" data-layout={layout}>
+    <main className="study" data-layout={layout} data-ask={askOpen ? "open" : undefined}>
       <div className="study-leftbg" aria-hidden="true" />
       <div className="study-top" />
       {mounted && <TimerClock />}

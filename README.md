@@ -1,10 +1,10 @@
 # Meet Tuck: your focus partner
 
+![Meet Tuck. He'll sit with you till it's done.](docs/banner.png)
+
 **Tuck** is a calm Pomodoro timer with a focus partner: a tiny 3D acorn who keeps you company. Tell him what you're working on and he turns it into **one small goal** that fits your session. When the timer ends he asks **"Did you finish?"** and reacts: a hop for a win, a nod for "almost", a kind head tilt for "not yet". Then he suggests the next step.
 
 **Live:** https://pocket-pal-teal.vercel.app
-
-![Tuck: the timer and Tuck in one studio room](docs/screenshot.png)
 
 ## How it works
 

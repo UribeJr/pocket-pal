@@ -61,6 +61,8 @@ export const StudyContext = z.strictObject({
   shortMin: z.number().int().min(1).max(240).optional(),
   longMin: z.number().int().min(1).max(240).optional(),
   elapsedMin: z.number().int().min(0).max(240).optional(),
+  /** finished focus sessions today plus the running one, in minutes */
+  focusMinToday: z.number().int().min(0).max(1440).optional(),
   /** what the user said they're working on, and the goal Tuck set for this session */
   task: z.string().trim().max(120).optional(),
   goal: z.string().trim().max(120).optional(),

@@ -103,8 +103,11 @@ export function directStudy() {
   const chat = useChatStore.getState();
   // with a task, Tuck's own goal line follows from the AI: skip the generic "let's focus" line
   if (m.label === "study:focusStart" && chat.task.trim()) m.cmds = m.cmds.filter((c) => c.kind !== "say");
-  // a finished focus session with a goal: ask "did you finish?"
-  if (unseen.some((e) => e.type === "focusCompleted") && chat.goal) useChatStore.setState({ checkinOpen: true });
+  // a finished focus session with a goal: ask "did you finish?", and don't say "you did it" before they answer
+  if (unseen.some((e) => e.type === "focusCompleted") && chat.goal) {
+    useChatStore.setState({ checkinOpen: true });
+    if (m.label === "study:focusDone") m.cmds = m.cmds.map((c) => (c.kind === "say" ? { ...c, text: pickLine(copy.tuck.timeUp) } : c));
+  }
   if (unseen.some((e) => e.type === "focusStarted" || e.type === "reset")) useChatStore.setState({ checkinOpen: false });
   if (ctl.emotions.emotion === "sleepy") ctl.setEmotion("content", PRIORITY.system, 0);
   void ctl.run(m.cmds, PRIORITY.system, m.label).then(() => {

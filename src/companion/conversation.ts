@@ -8,6 +8,7 @@ import type { ChatTurn, ContextSnapshot, ConversationResponse, StudyContext } fr
 import { useCompanionStore } from "@/stores/companionStore";
 import { getActiveController } from "@/engine/activeController";
 import { nowWithOverride } from "@/engine/simulation/timeOfDay";
+import { copy } from "@/lib/copy";
 import { browserKV } from "./persist";
 import { LocalMemoryStore, type Fact, type MemoryStore } from "./memory/MemoryStore";
 import { familiarityText, loadSession, saveSession } from "./session";
@@ -98,6 +99,8 @@ export function buildStudyContext(): StudyContext {
     cycle: `${n} of ${p.settings.longEvery}`,
     focusMin: mins(p.settings.focusMin), shortMin: mins(p.settings.shortMin), longMin: mins(p.settings.longMin),
     elapsedMin: p.status === "ready" ? 0 : Math.min(240, Math.max(0, Math.round((p.durationMs - left) / 60000))),
+    // completed sessions count at the current focus length (an estimate if the length changed today)
+    focusMinToday: Math.min(1440, Math.round(p.completedToday * p.settings.focusMin + (p.phase === "focus" && p.status !== "ready" ? (p.durationMs - left) / 60000 : 0))),
     ...(task.trim() ? { task: task.trim().slice(0, 120) } : {}),
     ...(goal.trim() ? { goal: goal.trim().slice(0, 120) } : {}),
   };
@@ -173,7 +176,8 @@ export async function answerCheckin(answer: "yes" | "almost" | "no", fetcher: ty
   if (checking) return;
   useChatStore.setState({ checkinOpen: false, checking: true });
   const ctl = getActiveController();
-  const reacting = ctl ? ctl.run(checkinReaction(answer, typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches), PRIORITY.user, "checkin") : Promise.resolve();
+  // system priority: it replaces the end-of-session moment at once, so the caption always matches the answer
+  const reacting = ctl ? ctl.run(checkinReaction(answer, typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches), PRIORITY.system, "checkin") : Promise.resolve();
   const label = answer === "yes" ? "Yes, I finished it." : answer === "almost" ? "Almost." : "Not yet.";
   const res = await callTuck({ message: `${label}${goal ? ` (goal: ${goal})` : ""}`.slice(0, 500), moment: "checkin", checkin: answer }, fetcher);
   useChatStore.setState({ checking: false, ...(res.ok && res.goal ? { goal: res.goal, goalFor: useChatStore.getState().task.trim() } : {}) });
@@ -183,10 +187,11 @@ export async function answerCheckin(answer: "yes" | "almost" | "no", fetcher: ty
 
 /** pure: Tuck's body answer to "did you finish?" (existing clips only; the model never picks these) */
 export function checkinReaction(answer: "yes" | "almost" | "no", reduced = false): BehaviorCommand[] {
-  if (answer === "yes") return [{ kind: "emote", emotion: "excited", hold: 4 }, { kind: "lookAt", target: CAMERA }, { kind: "play", clip: reduced ? "wave" : "hop", fallback: ["happy"] }];
-  if (answer === "almost") return [{ kind: "emote", emotion: "content", hold: 4 }, { kind: "lookAt", target: CAMERA }, { kind: "play", clip: "happy", fallback: ["weightShift"] }];
+  const say: BehaviorCommand = { kind: "say", text: copy.focus.checkinCaption[answer], seconds: 2.2 };
+  if (answer === "yes") return [{ kind: "emote", emotion: "excited", hold: 4 }, { kind: "lookAt", target: CAMERA }, say, { kind: "play", clip: reduced ? "wave" : "hop", fallback: ["happy"] }];
+  if (answer === "almost") return [{ kind: "emote", emotion: "content", hold: 4 }, { kind: "lookAt", target: CAMERA }, say, { kind: "play", clip: "happy", fallback: ["weightShift"] }];
   // a kind head tilt: look a little up and to the side, curious face, settle
-  return [{ kind: "emote", emotion: "curious", hold: 4 }, { kind: "lookAt", target: { x: 1.4, y: 2.1, z: 4 } }, { kind: "play", clip: "weightShift", fallback: ["idle"], hold: 1.2 }];
+  return [{ kind: "emote", emotion: "curious", hold: 4 }, { kind: "lookAt", target: { x: 1.4, y: 2.1, z: 4 } }, say, { kind: "play", clip: "weightShift", fallback: ["idle"], hold: 1.2 }];
 }
 
 /** what a Tuck turn looks like when sent back as history (spoken line + answer, within the 2,000 cap) */

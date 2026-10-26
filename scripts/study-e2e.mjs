@@ -123,7 +123,11 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
       const card = await page.waitForSelector('[data-testid="checkin"]', { timeout: 8000 }).then(() => true).catch(() => false);
       check(r, card, "focus done -> 'did you finish?' card");
       if (card) {
-        await page.click('[data-testid="checkin-yes"]');
+        const atEnd = await page.evaluate(() => window.__pocketPal.store.getState().speech ?? "");
+        check(r, !/you did it|nice work|proud/i.test(atEnd), `no verdict before the answer (${atEnd})`);
+        await page.click('[data-testid="checkin-almost"]');
+        const cap = await page.waitForFunction(() => window.__pocketPal.store.getState().speech === "So close! Nice push.", null, { timeout: 4000 }).then(() => true).catch(() => false);
+        check(r, cap, "'Almost' -> caption matches at once");
         const goal2 = await page.waitForFunction(() => document.querySelector('[data-testid="focus-goal"]')?.textContent?.includes("Write the first argument"), null, { timeout: 8000 }).then(() => true).catch(() => false);
         check(r, goal2, "check-in answer -> Tuck suggests the next goal");
         const said = await page.waitForFunction(() => window.__pocketPal.store.getState().speech?.startsWith("You did it"), null, { timeout: 15000 }).then(() => true).catch(() => false);
@@ -142,7 +146,7 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
       check(r, bubble === "okay, three steps.", `speech bubble shows the short line (${bubble})`);
       await shot("ask");
       await page.keyboard.press("Escape");
-      check(r, (await page.$$('[data-testid="ask-chips"] button')).length === 3, "chips stay visible after use");
+      check(r, (await page.$$('[data-testid="ask-chips"] button')).length === 4, "chips stay visible after use");
       check(r, convo === 3, `three conversation requests: start, check-in, chip (${convo})`);
       await page.evaluate(() => window.__pocketPal.clock.reset());
       const errs = errors.filter((e) => !/GPU stall|WebGL.*(warning|performance)/i.test(e));

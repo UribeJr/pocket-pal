@@ -14,6 +14,8 @@ export const copy = {
     next: "Next",
     checkinQuestion: (goal: string) => `Did you finish: ${goal}?`,
     yes: "Yes", almost: "Almost", notYet: "Not yet",
+    /** Tuck's caption the moment you answer, so it always matches your choice */
+    checkinCaption: { yes: "Yes! You did it!", almost: "So close! Nice push.", no: "That's okay. Let's make it smaller." },
   },
 
   phase: { focus: "Focus", short: "Short break", long: "Long break" },
@@ -46,6 +48,8 @@ export const copy = {
   tuck: {
     focusStart: ["okay. let's focus.", "quiet mode. i'm right here.", "let's do this together."],
     focusDone: ["nice work.", "that's a whole session. proud of you.", "done! stretch a little?", "you did it."],
+    /** session end when there's a goal to check: no verdict before the user answers */
+    timeUp: ["Time's up! How did it go?", "That's the timer. How did it go?"],
     cycleDone: ["four sessions! that's a real streak.", "a whole cycle. take a proper break."],
     breakOver: ["ready when you are.", "back to it?"],
   },
@@ -63,6 +67,7 @@ export const copy = {
       { label: "Plan this session", prompt: "Help me plan this focus session." },
       { label: "I'm stuck", prompt: "I'm stuck." },
       { label: "I'm distracted", prompt: "I'm distracted." },
+      { label: "Quiz me", prompt: "Quiz me on what I'm working on. One question." },
     ],
     visitOnly: "This conversation isn't saved after you leave.",
     failure: "Oops, Tuck lost his train of thought.",

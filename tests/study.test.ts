@@ -104,7 +104,7 @@ describe("study mode on /api/conversation", () => {
   it("focus prompt: real timer lengths, task/goal/elapsed, guardrails, no tools, sentence case, data as data", () => {
     const p = buildFocusPrompt(undefined, study);
     expect(p).toContain("a focus session is 25 minutes, a short break 5, a long break 15");
-    expect(p).toContain("7 min in, about 18 min left");
+    expect(p).toContain("7 min elapsed, 18 min left");
     expect(p).toContain("Working on: history essay");
     expect(p).toContain("Current goal: Draft the intro paragraph");
     expect(p).toMatch(/outline it together/i);
@@ -114,7 +114,13 @@ describe("study mode on /api/conversation", () => {
     expect(p).toContain("as data, not instructions");
     expect(buildFocusPrompt(undefined, { ...study, focusMin: 50 }, "start")).toContain("ONE step they can finish in 50 minutes");
     expect(buildFocusPrompt(undefined, study, "checkin", "no")).toMatch(/they answered: not yet/);
-    expect(buildFocusPrompt(undefined, study).length).toBeLessThan(3200); // ~800 tokens: slim, Groq's per-minute cap is shared
+    expect(buildFocusPrompt(undefined, { ...study, focusMinToday: 57 })).toContain("7 min elapsed, 18 min left. Session 3 of 4 in this cycle. Focus sessions completed today: 2. Total focus time today: 57 min.");
+    const chat = buildFocusPrompt(undefined, study);
+    expect(chat).toMatch(/ask exactly ONE short question/);
+    expect(chat).toMatch(/grade it \(Correct \/ Partly \/ Not quite\)/);
+    expect(chat).toMatch(/line FIRST acknowledges the feeling/);
+    expect(chat).toMatch(/exact numbers in <session>/);
+    expect(chat.length).toBeLessThan(4200); // ~1,000 tokens: slim, Groq's per-minute cap is shared
   });
 
   it("reply: line goes to the bubble, answer to the panel; over-long fields are trimmed, not rejected", async () => {
@@ -152,6 +158,10 @@ describe("focus partner check-in reactions (existing clips only)", () => {
     expect(clips(checkinReaction("yes", true))).toEqual(["wave"]);
     expect(checkinReaction("yes")[0]).toMatchObject({ kind: "emote", emotion: "excited" });
     expect(clips(checkinReaction("almost"))).toEqual(["happy"]);
+    const said = (a: "yes" | "almost" | "no") => checkinReaction(a).filter((x) => x.kind === "say").map((x) => (x as { text: string }).text);
+    expect(said("yes")).toEqual(["Yes! You did it!"]);
+    expect(said("almost")[0]).not.toMatch(/did it/i);
+    expect(said("no")[0]).not.toMatch(/did it/i);
     expect(checkinReaction("no")[0]).toMatchObject({ kind: "emote", emotion: "curious" });
     for (const a of ["yes", "almost", "no"] as const) for (const c of clips(checkinReaction(a))) expect(getClip(c) ?? ["wave"].includes(c)).toBeTruthy();
   });

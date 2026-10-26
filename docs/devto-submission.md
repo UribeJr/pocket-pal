@@ -2,6 +2,7 @@
 title: "Tuck: a tiny acorn who turns \"ugh, my essay\" into one 25-minute goal"
 published: false
 tags: devchallenge, hf26challenge, ai, opensource
+cover_image: https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/01-hero.png
 ---
 
 <!-- DRAFT for review before publishing: check every claim, the links, and that the GitHub repo is public with a license. -->
@@ -19,15 +20,33 @@ The hard part of focusing usually isn't the 25 minutes. It's deciding what to do
 3. He sits down and works quietly next to you.
 4. When the timer ends he asks **"Did you finish?"** You tap **Yes**, **Almost** or **Not yet**. He hops, nods or tilts his head kindly, then suggests the next small step.
 
-When you get stuck mid-session, **Ask Tuck** has three one-tap buttons: *Plan this session*, *I'm stuck* and *I'm distracted*. Replies are a sentence or two, because a focus partner shouldn't become the distraction.
+![Tuck asks "Did you finish?"; you tap Yes and he hops: "Yes! You did it!", then suggests the next goal](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/10-checkin-hop.gif)
+
+When you get stuck mid-session, **Ask Tuck** has four one-tap buttons: *Plan this session*, *I'm stuck*, *I'm distracted* and *Quiz me*. Replies are a sentence or two, because a focus partner shouldn't become the distraction.
 
 ## Demo
 
 **Live:** https://pocket-pal-teal.vercel.app. Try typing a task and pressing Start. To see the check-in without waiting 25 minutes, set Focus to 1 minute in Settings.
 
-![Pocket Pal: the timer and Tuck in one studio room](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/screenshot.png)
+Every screenshot below is the live app with real gpt-oss replies.
 
-<!-- TODO: add a 30–60 s screen recording: type a task -> goal appears -> skip ahead -> "Did you finish?" -> hop -->
+**1. Type four words.**
+![The timer reads 25:00 with "my history essay" typed under it; Tuck stands beside it in a soft studio room](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/02-what-are-you-working-on.png)
+
+**2. Tuck turns them into one goal that fits the session**, then sits down and works with you.
+![Mid-session at 18:38: the goal line reads "Draft the intro paragraph" and Tuck says "Let's get that intro shining!"](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/03-tuck-sets-one-goal.png)
+
+**3. When the timer ends, he checks in**, with no verdict until you answer.
+![Short break: "Did you finish: Draft the intro paragraph?" with Yes, Almost and Not yet buttons; Tuck asks "Time's up! How did it go?"](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/04-did-you-finish.png)
+
+**4. Tap Yes, and he jumps.**
+![Tuck mid-hop with his shadow on the floor, saying "Yes! You did it!"](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/05-yes-you-did-it.png)
+
+**5. The next small step is ready** for your next Start, with no extra AI call.
+![Tuck smiling, "Great job, you nailed it!", with "Next · Outline main arguments" under the timer](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/06-next-goal.png)
+
+**It works on your phone too.**
+![Phone layout: the timer at 15:15 on top, Tuck in the middle saying "Ready to ace those biology flashcards?", goal "Review one flashcard set"](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/09-phone.png)
 
 ## Code
 
@@ -43,6 +62,15 @@ When you get stuck mid-session, **Ask Tuck** has three one-tap buttons: *Plan th
   - Replies use a strict JSON schema: `line`, `goal`, `emotion`, `action`.
   - The server validates them with zod. Nothing the model writes becomes HTML.
 - **The model suggests; the app decides the body.** Tuck's check-in reaction (hop, nod or head tilt) is chosen by the app from your answer, never by the model. The model can only pick from a short list of safe moods.
+- **Guardrails in the prompt, not in a filter:**
+  - *Quiz me* asks one question and grades your answer in your own words.
+  - "Write my essay" becomes "let's outline it together".
+  - Stress gets a warm acknowledgement before any suggestion.
+  - Time questions are answered from the real timer state ("You've been focusing for 12 minutes").
+
+![Ask Tuck: "What does a thesis statement do?", the answer graded "Correct! That's spot on." with a one-sentence explanation and a next question](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/07-quiz-me-graded.png)
+
+![Ask Tuck: "I'm so stressed, I want to quit." answered with "That sounds like a lot right now." then a short break and one small next step](https://raw.githubusercontent.com/UribeJr/pocket-pal/main/docs/submission/08-stressed-warm-reply.png)
 
 **The bug that taught me the most.** After two good replies, every message said *"Ask Tuck isn't connected. It needs its AI key"*, even though the key was right there. The production logs told a different story: Groq was returning `400 tool_use_failed`. gpt-oss sometimes decides to call a tool, even with no tools defined. My error handling lumped every unexpected 400 into "misconfigured", and the UI showed that as "no key".
 

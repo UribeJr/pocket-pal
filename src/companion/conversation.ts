@@ -1,4 +1,5 @@
 "use client";
+import { track } from "@vercel/analytics";
 import { create } from "zustand";
 import type { BehaviorCommand, CharacterController } from "@/types/companion";
 import { PRIORITY } from "@/types/companion";
@@ -174,6 +175,7 @@ export async function startFocus(fetcher: typeof fetch = fetch) {
 export async function answerCheckin(answer: "yes" | "almost" | "no", fetcher: typeof fetch = fetch) {
   const { goal, checking } = useChatStore.getState();
   if (checking) return;
+  try { track("checkin_answer", { answer: answer === "no" ? "not_yet" : answer }); } catch { /* best-effort */ }
   useChatStore.setState({ checkinOpen: false, checking: true });
   const ctl = getActiveController();
   // system priority: it replaces the end-of-session moment at once, so the caption always matches the answer

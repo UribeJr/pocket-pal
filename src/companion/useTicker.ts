@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { track } from "@vercel/analytics";
 import { clock } from "@/engine/simulation/clock";
 import { copy } from "@/lib/copy";
 import { endsAt, fmtClock, minutesOf, onPomodoroEvents, remainingMs, syncAcrossTabs, usePomodoro, type PomoEvent } from "./pomodoro";
@@ -73,6 +74,10 @@ export function usePomodoroAlerts(announce: (text: string) => void) {
     const s = useSettings.getState().settings;
     const last = events[events.length - 1];
     if (!last) return;
+    if (events.some((e) => e.type === "focusStarted")) {
+      // counts only, never user text
+      try { track("session_started", { phase: "focus", session: usePomodoro.getState().focusDone + 1, focus_minutes: minutesOf("focus", s) }); } catch { /* analytics is best-effort */ }
+    }
     const ended = events.some((e) => e.type === "focusCompleted" || e.type === "breakCompleted");
     const line = textFor(last, s);
     if (line) announce(line);

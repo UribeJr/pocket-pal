@@ -1,4 +1,5 @@
 "use client";
+import { track } from "@vercel/analytics";
 import { useEffect, useRef, useState } from "react";
 import { copy } from "@/lib/copy";
 import { closeConversation, retryMessage, sendMessage, useChatStore, type ChatMessage } from "@/companion/conversation";
@@ -96,7 +97,7 @@ function AskTuckPanel() {
         {/* one tap sends; the chips stay for the next time you're stuck */}
         <div className="flex flex-wrap gap-2 px-3 pt-2" data-testid="ask-chips">
           {copy.ask.chips.map((c) => (
-            <button key={c.label} type="button" className="chip" disabled={pending} onClick={() => void sendMessage(c.prompt)}>{c.label}</button>
+            <button key={c.label} type="button" className="chip" disabled={pending} onClick={() => { try { track("ask_tuck_chip", { chip: c.key }); } catch { /* best-effort */ } void sendMessage(c.prompt); }}>{c.label}</button>
           ))}
         </div>
         <form onSubmit={submit} className="flex items-center gap-2 border-t border-[#E5E1DA] px-3 py-2">

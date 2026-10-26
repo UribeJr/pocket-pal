@@ -36,7 +36,9 @@ function Message({ m }: { m: ChatMessage }) {
   }
   return (
     <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-[14px] leading-relaxed shadow-[0_1px_2px_rgba(60,50,40,0.06)]" data-testid="ask-answer">
-      {m.answer ? <MiniMarkdown text={m.answer} /> : <p>{m.text}</p>}
+      {/* his spoken line leads (a quiz verdict, "That sounds like a lot"), then the details */}
+      <p className={m.answer ? "mb-1.5 font-medium" : undefined} data-testid="ask-line">{m.text}</p>
+      {m.answer && <MiniMarkdown text={m.answer} />}
     </div>
   );
 }

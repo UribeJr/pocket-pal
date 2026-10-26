@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { copy } from "@/lib/copy";
+import { useTour } from "@/companion/tour";
 import { useSettings, type StudySettings } from "@/companion/settings";
 import { useChatStore } from "@/companion/conversation";
 import { useCompanionStore } from "@/stores/companionStore";
@@ -77,6 +78,10 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
         <button type="button" className="btn mt-1 justify-start self-start border-line !px-4" style={{ borderColor: "#CFCAC2" }} data-testid="memory-open"
           onClick={() => { onClose(); useChatStore.setState({ sheet: true }); }}>
           {copy.settings.memoryOpen}
+        </button>
+        <button type="button" className="btn mt-2 justify-start self-start border-line !px-4" style={{ borderColor: "#CFCAC2" }} data-testid="tour-replay"
+          onClick={() => { onClose(); setTimeout(() => useTour.getState().start(), 250); }}>
+          {copy.tour.open}
         </button>
       </div>
     </>

@@ -45,7 +45,7 @@ export function TimerControls() {
         <button type="button" className="btn btn-quiet" onClick={reset} aria-label={copy.controls.resetLabel} data-testid="focus-cancel" disabled={status === "ready" && phase === "focus"}>
           {copy.controls.reset}
         </button>
-        <button type="button" className="btn btn-primary" onClick={primary} aria-label={aria} data-testid="focus-start">
+        <button type="button" className="btn btn-primary" onClick={primary} aria-label={aria} data-testid="focus-start" data-tour="start">
           {label}
         </button>
         <button type="button" className="btn btn-quiet" onClick={() => pomo().skip()} aria-label={copy.controls.skipLabel} data-testid="focus-skip">

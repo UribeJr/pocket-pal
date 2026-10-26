@@ -14,6 +14,8 @@ import { usePomodoro, initialPomo } from "@/companion/pomodoro";
 import { CharacterControllerImpl } from "@/engine/animation/CharacterControllerImpl";
 import type { AnimationBackend, ClipName, PlayOptions } from "@/types/animation";
 import { getClip } from "@/engine/animation/registry";
+import { shouldAutoStartTour, tourCommands, tourSeen, TOUR_STEPS, useTour } from "@/companion/tour";
+import { copy } from "@/lib/copy";
 import "@/engine/animation/proceduralClips";
 import "@/engine/animation/livingClips";
 
@@ -188,5 +190,34 @@ describe("MiniMarkdown (safe subset)", () => {
     expect(html).toContain("<code>code</code>");
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;img");
+  });
+});
+
+describe("Meet Tuck: the scripted walkthrough (no AI)", () => {
+  const clipsOf = (c: ReturnType<typeof tourCommands>) => c.filter((x) => x.kind === "play").map((x) => (x as { clip: string }).clip);
+  it("7 steps; every step speaks its line and plays only existing clips; the 'yes' step hops (waves with reduced motion)", () => {
+    expect(TOUR_STEPS).toHaveLength(7);
+    expect(copy.tour.steps).toHaveLength(7);
+    TOUR_STEPS.forEach((_, i) => {
+      const cmds = tourCommands(i);
+      expect(cmds.find((c) => c.kind === "say")).toMatchObject({ text: copy.tour.steps[i].say });
+      for (const clip of [...clipsOf(cmds), ...clipsOf(tourCommands(i, true))]) expect(getClip(clip) ?? ["wave"].includes(clip), `${i}: ${clip}`).toBeTruthy();
+    });
+    expect(clipsOf(tourCommands(3))).toEqual(["hop"]);
+    expect(clipsOf(tourCommands(3, true))).toEqual(["wave"]);
+    expect(TOUR_STEPS.map((s) => s.target)).toEqual([undefined, "task", "start", "clock", "ask", "top", undefined]);
+  });
+  it("auto-starts once, only when the timer is ready", () => {
+    const mem = new Map<string, string>();
+    (globalThis as { localStorage?: unknown }).localStorage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+    usePomodoro.setState({ ...initialPomo() });
+    expect(shouldAutoStartTour()).toBe(true);
+    usePomodoro.setState({ status: "running" });
+    expect(shouldAutoStartTour()).toBe(false);
+    usePomodoro.setState({ status: "ready" });
+    useTour.getState().start(); useTour.getState().end();
+    expect(tourSeen()).toBe(true);
+    expect(shouldAutoStartTour()).toBe(false);
+    delete (globalThis as { localStorage?: unknown }).localStorage;
   });
 });

@@ -16,6 +16,8 @@ import { TimerControls } from "./TimerControls";
 import { AskTuck } from "./AskTuck";
 import { SettingsSheet } from "./SettingsSheet";
 import { FullscreenButton } from "./FullscreenButton";
+import { TourGuide } from "./TourGuide";
+import { useTour } from "@/companion/tour";
 
 const StudyStage = dynamic(() => import("./StudyStage"), { ssr: false });
 
@@ -62,7 +64,12 @@ export function StudyApp({ forced }: { forced?: LayoutMode }) {
         </div>
       )}
       {mounted && (
-        <div className="top-actions">
+        <div className="top-actions" data-tour="top">
+        <button type="button" className="icon-btn" aria-label={copy.tour.open} title={copy.tour.open} data-testid="tour-open" onClick={() => useTour.getState().start()}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" /><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6" /><path d="M12 17h.01" />
+          </svg>
+        </button>
         <FullscreenButton />
         <button type="button" className="icon-btn"
           aria-label={copy.settings.open} data-testid="settings-open" onClick={() => setSettingsOpen(true)}>
@@ -74,6 +81,7 @@ export function StudyApp({ forced }: { forced?: LayoutMode }) {
         </div>
       )}
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
+      {mounted && <TourGuide />}
       {memorySheet && <MemorySheet />}
       <p className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</p>
     </main>

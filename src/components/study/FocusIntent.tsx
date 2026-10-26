@@ -34,7 +34,7 @@ export function FocusIntent() {
       <form className="focus-intent" onSubmit={(e) => { e.preventDefault(); void startFocus(); }}>
         <input
           className="field !min-h-10 !rounded-full !py-2 text-center" value={task} maxLength={120}
-          placeholder={copy.focus.taskPlaceholder} aria-label={copy.focus.taskLabel} data-testid="focus-task"
+          placeholder={copy.focus.taskPlaceholder} aria-label={copy.focus.taskLabel} data-testid="focus-task" data-tour="task"
           onChange={(e) => useChatStore.setState({ task: e.target.value })}
         />
         {suggested && <p className="goal-line" data-testid="focus-goal">{copy.focus.next} · {suggested}</p>}

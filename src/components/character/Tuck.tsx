@@ -1,5 +1,6 @@
 "use client";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useTour } from "@/companion/tour";
 import * as THREE from "three";
 import { setActiveController } from "@/engine/activeController";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
@@ -89,7 +90,7 @@ export function Tuck({ onController }: { onController?: (c: CharacterControllerI
     setActiveController(c);
     const w = window as unknown as Record<string, unknown>;
     w.__pocketPal = {
-      store: useCompanionStore, controller: c, behavior: eng, pomodoro: usePomodoro, settings: useSettings, clock,
+      store: useCompanionStore, controller: c, behavior: eng, pomodoro: usePomodoro, settings: useSettings, clock, tour: useTour,
       engineContext: () => engineCtx(),
       tuckScreenPos: () => {
         const v = new THREE.Vector3(); refs.current.body?.getWorldPosition(v); v.y += 0.3; v.project(get().camera);

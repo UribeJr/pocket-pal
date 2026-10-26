@@ -51,7 +51,7 @@ export function AskTuck() {
   useEffect(() => { if (wasOpen.current && !open) pill.current?.focus(); wasOpen.current = open; }, [open]);
   if (!open) {
     return (
-      <button ref={pill} type="button" className="ask-pill fade-in" onClick={openAsk} aria-label={copy.ask.entryLabel} data-testid="ask-open">
+      <button ref={pill} type="button" className="ask-pill fade-in" onClick={openAsk} aria-label={copy.ask.entryLabel} data-testid="ask-open" data-tour="ask">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /></svg>
         <span>{copy.ask.entry}</span>
       </button>

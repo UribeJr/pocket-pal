@@ -21,7 +21,7 @@ export function TimerClock() {
       <p className="clock-phase fade-in" key={`${phase}-${status}`}>
         {label}{status === "paused" ? ` · ${copy.status.paused}` : ""}
       </p>
-      <div role="timer" aria-label={`${copy.phase[phase]}: ${text} remaining`} className="clock-digits" data-testid="focus-remaining">
+      <div role="timer" aria-label={`${copy.phase[phase]}: ${text} remaining`} className="clock-digits" data-testid="focus-remaining" data-tour="clock">
         {text}
       </div>
     </div>

@@ -148,6 +148,25 @@ for (const [bname, bt] of [["chromium", chromium], ["webkit", webkit]]) {
       await page.keyboard.press("Escape");
       check(r, (await page.$$('[data-testid="ask-chips"] button')).length === 4, "chips stay visible after use");
       check(r, convo === 3, `three conversation requests: start, check-in, chip (${convo})`);
+      // ---- Meet Tuck: the walkthrough Tuck gives in his own bubble ----
+      check(r, !(await page.$('[data-testid="tour"]')), "no auto tour under automation");
+      const tourLines = ["Hi, I'm Tuck! Want a 20-second tour?", "Tell me what you're working on, right here.", "Press Start. I'll turn it into one small goal that fits your timer.", "When time's up, I'll ask if you finished. Say yes and I'll do this!", "Stuck, distracted, or want a quick quiz? Ask me here.", "Change the timer up here, or go full screen.", "That's it. Let's focus together!"];
+      const rings = [null, "task", "start", "clock", "ask", "top", null];
+      await page.click('[data-testid="tour-open"]');
+      let tourOk = true;
+      for (let i = 0; i < tourLines.length; i++) {
+        const said = await page.waitForFunction((t) => window.__pocketPal.store.getState().speech === t, tourLines[i], { timeout: 5000 }).then(() => true).catch(() => false);
+        const ringed = rings[i] ? await page.$(`[data-tour="${rings[i]}"].tour-ring`) : true;
+        if (!said || !ringed) { tourOk = false; const st = await page.evaluate(() => [...document.querySelectorAll("[data-tour]")].map((e) => e.dataset.tour + (e.classList.contains("tour-ring") ? "*" : "")).join(" ") + " | askOpen=" + !!document.querySelector('[data-testid="talk-popover"]')); check(r, false, `tour step ${i + 1}: said=${said} ring=${!!ringed} (${st})`); break; }
+        if (i === 3) await shot("tour-hop");
+        await page.click('[data-testid="tour-next"]');
+      }
+      await page.waitForTimeout(300);
+      check(r, tourOk && !(await page.$('[data-testid="tour"]')) && !(await page.evaluate(() => window.__pocketPal.store.getState().speech)) && !(await page.$(".tour-ring")), "tour: 7 steps, each line in Tuck's bubble with the right ring; ends cleanly");
+      await page.click('[data-testid="settings-open"]'); await page.click('[data-testid="tour-replay"]');
+      const replay = await page.waitForSelector('[data-testid="tour"]', { timeout: 4000 }).then(() => true).catch(() => false);
+      await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+      check(r, replay && !(await page.$('[data-testid="tour"]')), "Settings replays the tour; Escape skips it");
       await page.evaluate(() => window.__pocketPal.clock.reset());
       const errs = errors.filter((e) => !/GPU stall|WebGL.*(warning|performance)/i.test(e));
       check(r, !errs.length, `console errors: ${errs.join(" | ") || "none"}`);

@@ -89,6 +89,23 @@ export const copy = {
 
   fullscreen: { enter: "Full screen", exit: "Exit full screen", iosHint: "For full screen on iPhone: tap Share, then “Add to Home Screen”, and open Tuck from there." },
 
+  /** "Meet Tuck": the walkthrough Tuck gives in his own bubble (the card repeats it for screen readers) */
+  tour: {
+    label: "Meet Tuck",
+    open: "Take the tour",
+    start: "Show me", notNow: "Not now", next: "Next", done: "Let's go", skip: "Skip tour",
+    progress: (n: number, of: number) => `${n} / ${of}`,
+    steps: [
+      { say: "Hi, I'm Tuck! Want a 20-second tour?" },
+      { say: "Tell me what you're working on, right here." },
+      { say: "Press Start. I'll turn it into one small goal that fits your timer." },
+      { say: "When time's up, I'll ask if you finished. Say yes and I'll do this!" },
+      { say: "Stuck, distracted, or want a quick quiz? Ask me here." },
+      { say: "Change the timer up here, or go full screen." },
+      { say: "That's it. Let's focus together!" },
+    ],
+  },
+
   hint: { tap: "tap Tuck · hold to talk", sleeping: "tap to wake Tuck" },
 } as const;
 
